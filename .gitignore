@@ -192,3 +192,21 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+data/
+
+# Checkpoints and model weights
+*.pth
+*.npy
+model/ckpt/
+rqvae/ckpt/
+
+# Experiment logs
+*.log
+model/logs/
+
+# Backup directories
+backup_old_sport/
+
+# Claude AI working files (not project code)
+.claude/
+.memory
