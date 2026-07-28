@@ -37,6 +37,34 @@ info() { echo -e "${BLUE}[i]${NC} $*"; }
 section() { echo -e "\n${BOLD}===== $* =====${NC}\n"; }
 
 # ============================================================================
+# Conda 环境激活（所有 Python 命令执行前必须先调用）
+# ============================================================================
+setup_conda() {
+    # 如果已经激活过，跳过
+    if [ -n "${CONDA_DEFAULT_ENV:-}" ] && [ "${CONDA_DEFAULT_ENV}" = "tiger_t5" ]; then
+        return 0
+    fi
+    # 尝试激活 tiger_t5 环境
+    if command -v conda &>/dev/null; then
+        eval "$(conda shell.bash hook 2>/dev/null)" && conda activate tiger_t5 && {
+            log "conda env: tiger_t5 ($(python3 -c 'import torch; print(f"torch {torch.__version__}")' 2>/dev/null || echo 'OK'))"
+            return 0
+        }
+    fi
+    # 回退：尝试标准安装路径
+    for conda_base in ~/anaconda3 ~/miniconda3 /opt/conda; do
+        if [ -f "$conda_base/etc/profile.d/conda.sh" ]; then
+            source "$conda_base/etc/profile.d/conda.sh" && conda activate tiger_t5 && {
+                log "conda env: tiger_t5 ($conda_base)"
+                return 0
+            }
+        fi
+    done
+    warn "无法激活 conda tiger_t5 环境，将使用系统 python3"
+    warn "如果出错请手动执行: conda activate tiger_t5"
+}
+
+# ============================================================================
 # 配置（用户可修改）
 # ============================================================================
 # 目标服务器用户名和地址（scp 用，阶段 A 导出时填写）
@@ -49,6 +77,7 @@ TARGET_PATH="~/"
 # ============================================================================
 
 check_gpu() {
+    setup_conda
     python3 -c "import torch; v=torch.cuda.get_device_name(0); print(f'GPU: {v}')" 2>/dev/null && return 0
     err "GPU 不可用！请确保 PyTorch + CUDA 已正确安装。"
     return 1
@@ -99,7 +128,16 @@ cmd_pack() {
         "--exclude=${project_name}/.git"
     )
 
-    tar czf "$PACK_FILE" \
+    # 准备 Beauty 原始码（放到项目内一起打包，避免追加到压缩包）
+    local beauty_src=""
+    if [ -f "/data/gtx/project/code/TIGER/data/Beauty/Beauty_t5_rqvae.npy" ]; then
+        beauty_src="/data/gtx/project/code/TIGER/data/Beauty/Beauty_t5_rqvae.npy"
+        log "Beauty_t5_rqvae.npy 将一并打包"
+    fi
+
+    # 先创建未压缩 tar，便于追加
+    local tar_file="${PACK_FILE%.gz}"
+    tar cf "$tar_file" \
         "${exclude_opts[@]}" \
         "${project_name}/data/" \
         "${project_name}/model/" \
@@ -110,14 +148,17 @@ cmd_pack() {
         "${project_name}/requirements.txt" \
         "${project_name}/tiger_migration.sh"
 
-    # 额外打包 Beauty 原始码
-    if [ -f "/data/gtx/project/code/TIGER/data/Beauty/Beauty_t5_rqvae.npy" ]; then
+    # 额外追加 Beauty 原始码（tar 支持追加到未压缩归档）
+    if [ -n "$beauty_src" ]; then
         mkdir -p /tmp/beauty_orig_codes
-        cp /data/gtx/project/code/TIGER/data/Beauty/Beauty_t5_rqvae.npy /tmp/beauty_orig_codes/
-        tar rzf "$PACK_FILE" -C /tmp beauty_orig_codes/
+        cp "$beauty_src" /tmp/beauty_orig_codes/
+        tar rf "$tar_file" -C /tmp beauty_orig_codes/
         rm -rf /tmp/beauty_orig_codes
         log "已将 Beauty_t5_rqvae.npy 打包"
     fi
+
+    # 压缩为 .gz
+    gzip -f "$tar_file"
 
     local size=$(du -h "$PACK_FILE" | cut -f1)
     log "打包完成: ${PACK_FILE} (${size})"
@@ -138,6 +179,7 @@ cmd_pack() {
 # ============================================================================
 
 cmd_setup() {
+    setup_conda
     section "PHASE B: 在新服务器部署"
 
     cd "$PROJECT_ROOT"
@@ -273,6 +315,7 @@ cmd_check() {
 # 验证行为嵌入的改进不是"增加维度"造成的，而是 Behavior 信号本身有效
 
 cmd_ablation() {
+    setup_conda
     section "消融实验：Random Behavior Embedding → Toys"
     info "目的：对比基线 | TA-SID | Random Noise 三者性能"
     info "如果 Random ≈ Baseline 而 TA-SID >> Random → 证明 Behavior 信号有效"
@@ -297,7 +340,8 @@ import numpy as np
 import pandas as pd
 
 orig = pd.read_parquet('data/${DS}/behavior_emb.parquet')
-n, d = orig.shape[0], orig.shape[1]
+n = orig.shape[0]
+d = orig['embedding'].iloc[0].shape[0]  # 实际嵌入维度，非列数
 np.random.seed(2026)  # 固定种子
 random_emb = np.random.randn(n, d).astype(np.float32)
 df = pd.DataFrame({'ItemID': orig['ItemID'].values, 'embedding': [random_emb[i] for i in range(n)]})
@@ -340,8 +384,9 @@ rt = torch.from_numpy(rand_emb).float()
 ln_c = nn.LayerNorm(ct.shape[-1])
 ln_r = nn.LayerNorm(rt.shape[-1])
 
-c_norm = ln_c(ct)
-r_norm = ln_r(rt)
+with torch.no_grad():
+    c_norm = ln_c(ct)
+    r_norm = ln_r(rt)
 
 # Concat
 fused = torch.cat([c_norm, r_norm], dim=-1).numpy().astype(np.float32)
@@ -366,9 +411,9 @@ print(f'✓ 保存融合嵌入 → ${FUSED_RANDOM}')
     else
         info "RQ-VAE 需要 ~3000 epoch，约 1-2 小时..."
         mkdir -p "${CKPT_DIR}"
-        python rqvae/main.py \
-            --data_path "../${FUSED_RANDOM}" \
-            --ckpt_dir "./${CKPT_DIR}" \
+        python3 rqvae/main.py \
+            --data_path "${PROJECT_ROOT}/${FUSED_RANDOM}" \
+            --ckpt_dir "${PROJECT_ROOT}/${CKPT_DIR}" \
             --epochs 3000 \
             --batch_size 1024 \
             --eval_step 50 \
@@ -448,7 +493,7 @@ data_loader = DataLoader(data, num_workers=args.num_workers,
 
 all_indices = []
 all_indices_str = []
-prefix = ["<a_{{}}>","<b_{{}}>","<c_{{}}>","<d_{{}}>","<e_{{}}>"]
+prefix = ["<a_{}>","<b_{}>","<c_{}>","<d_{}>","<e_{}>"]
 
 for d in tqdm(data_loader):
     d = d.to(device)
@@ -536,7 +581,7 @@ print("✓ Codes saved!")
 PYEOF
 
         cd rqvae
-        python "generate_code_${DS}_random.py" 2>&1 | tee "${PROJECT_ROOT}/rqvae/logs/${DS}_random_generate_code.log"
+        python3 "generate_code_${DS}_random.py" 2>&1 | tee "${PROJECT_ROOT}/rqvae/logs/${DS}_random_generate_code.log"
         cd "$PROJECT_ROOT"
         log "随机码生成完成"
     fi
@@ -549,7 +594,7 @@ PYEOF
         log "T5 模型已存在: ${t5_save}，跳过"
     else
         info "T5 训练，预计 ~1.5h..."
-        python model/main.py \
+        python3 model/main.py \
             --dataset_path "data/${DS}" \
             --code_path "data/${DS}/${DS}_random_sid.npy" \
             --save_path "${t5_save}" \
@@ -585,6 +630,7 @@ PYEOF
 # ============================================================================
 
 cmd_baseline() {
+    setup_conda
     section "Baseline seed=42（仅 Beauty）"
 
     cd "$PROJECT_ROOT"
@@ -612,7 +658,7 @@ cmd_baseline() {
     fi
 
     info "训练 T5 (seed=42)... 预计 ~2h"
-    python model/main.py \
+    python3 model/main.py \
         --dataset_path "data/${DS}" \
         --code_path "data/${DS}/${DS}_t5_rqvae.npy" \
         --save_path "${t5_save}" \
@@ -631,6 +677,7 @@ cmd_baseline() {
 
 # 辅助函数：跑一轮 TA-SID（Step 1→5）但只用一个数据集
 run_one_ta_sid() {
+    setup_conda
     local ds="$1"
     local svd_dim="$2"
     local window="$3"
@@ -642,7 +689,7 @@ run_one_ta_sid() {
     local beh_emb="data/${ds}/behavior_emb_${tag}.parquet"
     if [ ! -f "$beh_emb" ]; then
         info "Step 1: 构建 Transition Graph (svd_dim=${svd_dim}, window=${window})"
-        python rqvae/build_transition_graph.py \
+        python3 rqvae/build_transition_graph.py \
             --dataset "$ds" \
             --svd_dim "$svd_dim" \
             --window_size "$window" \
@@ -658,7 +705,7 @@ run_one_ta_sid() {
         info "Step 2: 融合嵌入"
         # 临时复制 behavior_emb 到标准文件名
         cp "$beh_emb" "data/${ds}/behavior_emb.parquet"
-        python rqvae/fuse_embeddings.py \
+        python3 rqvae/fuse_embeddings.py \
             --dataset "$ds" \
             --data_dir "data" \
             2>&1 | tee "rqvae/logs/${ds}_fuse_${tag}.log" || return 1
@@ -673,9 +720,9 @@ run_one_ta_sid() {
     if [ ! -f "$t5_save" ]; then
         info "Step 3: RQ-VAE 训练..."
         mkdir -p "$ckpt_dir"
-        python rqvae/main.py \
-            --data_path "../${fused}" \
-            --ckpt_dir "./${ckpt_dir}" \
+        python3 rqvae/main.py \
+            --data_path "${PROJECT_ROOT}/${fused}" \
+            --ckpt_dir "${PROJECT_ROOT}/${ckpt_dir}" \
             --epochs 3000 \
             --batch_size 1024 \
             --eval_step 50 \
@@ -702,6 +749,7 @@ run_one_ta_sid() {
 }
 
 cmd_sweep() {
+    setup_conda
     section "[可选] 超参数扫描"
     warn "此步骤需要大量 GPU 时间（~9h），建议只在阶段 1+2 完成后有空再做"
     echo ""
@@ -716,9 +764,9 @@ cmd_sweep() {
     echo "  手动执行示例（每个实验独立运行）："
     echo ""
     echo "    # 实验 A"
-    echo "    python rqvae/build_transition_graph.py --dataset Toys --svd_dim 64  --window_size 3"
-    echo "    python rqvae/fuse_embeddings.py --dataset Toys"
-    echo "    python rqvae/run_ta_sid_pipeline.py --dataset Toys"
+    echo "    python3 rqvae/build_transition_graph.py --dataset Toys --svd_dim 64  --window_size 3"
+    echo "    python3 rqvae/fuse_embeddings.py --dataset Toys"
+    echo "    python3 rqvae/run_ta_sid_pipeline.py --dataset Toys"
     echo "    # 运行前备份原有的 behavior_emb/fused_item_emb！"
     echo ""
 
@@ -737,18 +785,18 @@ cmd_sweep() {
 
     # 实验 A
     section "实验 A: svd_dim=64, window=3"
-    python rqvae/build_transition_graph.py --dataset Toys --svd_dim 64 --window_size 3
-    python rqvae/fuse_embeddings.py --dataset Toys
-    python rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_A.log
+    python3 rqvae/build_transition_graph.py --dataset Toys --svd_dim 64 --window_size 3
+    python3 rqvae/fuse_embeddings.py --dataset Toys
+    python3 rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_A.log
     mv "data/Toys/behavior_emb.parquet" "data/Toys/behavior_emb_svd64.parquet"
     mv "data/Toys/fused_item_emb.parquet" "data/Toys/fused_item_emb_svd64.parquet"
     mv "data/Toys/Toys_ta_sid.npy" "data/Toys/Toys_sid_svd64.npy"
 
     # 实验 B
     section "实验 B: svd_dim=256, window=3"
-    python rqvae/build_transition_graph.py --dataset Toys --svd_dim 256 --window_size 3
-    python rqvae/fuse_embeddings.py --dataset Toys
-    python rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_B.log
+    python3 rqvae/build_transition_graph.py --dataset Toys --svd_dim 256 --window_size 3
+    python3 rqvae/fuse_embeddings.py --dataset Toys
+    python3 rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_B.log
     mv "data/Toys/behavior_emb.parquet" "data/Toys/behavior_emb_svd256.parquet"
     mv "data/Toys/fused_item_emb.parquet" "data/Toys/fused_item_emb_svd256.parquet"
     mv "data/Toys/Toys_ta_sid.npy" "data/Toys/Toys_sid_svd256.npy"
@@ -759,9 +807,9 @@ cmd_sweep() {
 
     # 实验 C: window=2
     section "实验 C: svd_dim=128, window=2"
-    python rqvae/build_transition_graph.py --dataset Toys --svd_dim 128 --window_size 2
-    python rqvae/fuse_embeddings.py --dataset Toys
-    python rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_C.log
+    python3 rqvae/build_transition_graph.py --dataset Toys --svd_dim 128 --window_size 2
+    python3 rqvae/fuse_embeddings.py --dataset Toys
+    python3 rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_C.log
     mv "data/Toys/behavior_emb.parquet" "data/Toys/behavior_emb_w2.parquet"
     mv "data/Toys/fused_item_emb.parquet" "data/Toys/fused_item_emb_w2.parquet"
     mv "data/Toys/Toys_ta_sid.npy" "data/Toys/Toys_sid_w2.npy"
@@ -772,9 +820,9 @@ cmd_sweep() {
 
     # 实验 D: window=5
     section "实验 D: svd_dim=128, window=5"
-    python rqvae/build_transition_graph.py --dataset Toys --svd_dim 128 --window_size 5
-    python rqvae/fuse_embeddings.py --dataset Toys
-    python rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_D.log
+    python3 rqvae/build_transition_graph.py --dataset Toys --svd_dim 128 --window_size 5
+    python3 rqvae/fuse_embeddings.py --dataset Toys
+    python3 rqvae/run_ta_sid_pipeline.py --dataset Toys 2>&1 | tee rqvae/logs/Toys_sweep_D.log
     mv "data/Toys/behavior_emb.parquet" "data/Toys/behavior_emb_w5.parquet"
     mv "data/Toys/fused_item_emb.parquet" "data/Toys/fused_item_emb_w5.parquet"
     mv "data/Toys/Toys_ta_sid.npy" "data/Toys/Toys_sid_w5.npy"
@@ -826,6 +874,7 @@ cmd_run_all() {
 # ============================================================================
 
 cmd_report() {
+    setup_conda
     section "实验结果汇总"
 
     cd "$PROJECT_ROOT"
