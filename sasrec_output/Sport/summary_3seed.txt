@@ -1,0 +1,11 @@
+# SASRec Sport — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.006013	0.009485	0.013695	0.011630	0.022529	0.039328	(best epoch 100)
+2026	0.006844	0.009736	0.013452	0.012894	0.021911	0.036744	(best epoch 20)
+2027	0.006404	0.009495	0.013192	0.011770	0.021434	0.036210	(best epoch 20)
+
+mean	0.006420	0.009572	0.013446	0.012098	0.021958	0.037427
+std	0.000339	0.000116	0.000205	0.000566	0.000448	0.001362

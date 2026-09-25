@@ -1,0 +1,11 @@
+# SASRec Toys — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.013133	0.018217	0.023653	0.025706	0.041521	0.063002	(best epoch 160)
+2026	0.012162	0.018305	0.024342	0.023130	0.042345	0.066351	(best epoch 180)
+2027	0.012697	0.018535	0.024362	0.024675	0.042912	0.066093	(best epoch 160)
+
+mean	0.012664	0.018353	0.024119	0.024504	0.042259	0.065149
+std	0.000397	0.000134	0.000329	0.001059	0.000571	0.001521

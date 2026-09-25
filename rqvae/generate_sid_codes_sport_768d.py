@@ -8,7 +8,7 @@ from datasets import EmbDataset
 from models.rqvae import RQVAE
 
 ckpt_path = r"/data/gtx/project/code/TIGER_minilm/rqvae/ckpt/Sport_TA_SID_768d/Jul-28-2026_22-58-36/best_collision_model.pth"
-output_file = r"/data/gtx/project/code/TIGER_minilm/data/Sport/Sport_sid_codes_768d.npy"
+output_file = r"/data/gtx/project/code/TIGER_minilm/data/Sport/Sport_ta_sid_768d_sid.npy"
 device = torch.device("cuda:0")
 DATA_PATH = "data/Sport/fused_item_emb_768d.parquet"
 

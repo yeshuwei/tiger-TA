@@ -36,6 +36,25 @@ def parse_args():
         default="data",
         help="Root data directory (relative to project root)",
     )
+    parser.add_argument(
+        "--content_file",
+        type=str,
+        default="item_emb.parquet",
+        help="Content embedding parquet (default: item_emb.parquet; use item_emb_768d.parquet for 768d)",
+    )
+    parser.add_argument(
+        "--behavior_file",
+        type=str,
+        default="behavior_emb.parquet",
+        help="Behavior embedding parquet (default: behavior_emb.parquet; "
+             "use behavior_emb_<variant>.parquet for ablation variants)",
+    )
+    parser.add_argument(
+        "--output_file",
+        type=str,
+        default=None,
+        help="Output fused parquet (default: fused_item_emb.parquet)",
+    )
     return parser.parse_args()
 
 
@@ -43,9 +62,10 @@ def main():
     args = parse_args()
 
     data_root = f"{args.data_dir}/{args.dataset}"
-    content_path = f"{data_root}/item_emb.parquet"
-    behavior_path = f"{data_root}/behavior_emb.parquet"
-    output_path = f"{data_root}/fused_item_emb.parquet"
+    content_path = f"{data_root}/{args.content_file}"
+    behavior_path = f"{data_root}/{args.behavior_file}"
+    output_path = (f"{data_root}/{args.output_file}" if args.output_file
+                   else f"{data_root}/fused_item_emb.parquet")
 
     # ---- 1. Load embeddings ----
     print(f"[1/3] Loading Content embedding from {content_path}")

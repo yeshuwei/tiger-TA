@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.init import xavier_normal_
@@ -73,6 +74,14 @@ def kmeans(
 ):
     B, dim, dtype, device = samples.shape[0], samples.shape[-1], samples.dtype, samples.device
     x = samples.cpu().detach().numpy()
+
+    if num_clusters > B:
+        # sklearn KMeans 要求 n_samples >= n_clusters。
+        # 大码本（K0=1536/2048）首个 batch(1024) 样本不足时，带放回采样扩充到 n_clusters，
+        # 再做真正的 k-means，使初始中心落在数据流形上（而非均匀随机——那会导致码本学崩）。
+        rng = np.random.RandomState(0)
+        idx = rng.choice(B, num_clusters, replace=True)
+        x = x[idx]
 
     cluster = KMeans(n_clusters = num_clusters, max_iter = num_iters).fit(x)
 

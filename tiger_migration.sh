@@ -264,7 +264,7 @@ cmd_check() {
     check_file "data/Beauty/test.parquet"        || all_ok=false
     check_file "data/Beauty/behavior_emb.parquet" || all_ok=false
     check_file "data/Beauty/fused_item_emb.parquet" || all_ok=false
-    check_file "data/Beauty/Beauty_ta_sid.npy"   || all_ok=false
+    check_file "data/Beauty/Beauty_ta_sid_768d_sid.npy"   || all_ok=false
 
     info "检查 Sport"
     check_file "data/Sport/train.parquet"        || all_ok=false

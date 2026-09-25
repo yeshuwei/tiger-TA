@@ -58,11 +58,13 @@ class RQVAE(nn.Module):
         self.decoder = MLPLayers(layers=self.decode_layer_dims,
                                        dropout=self.dropout_prob,bn=self.bn)
 
-    def forward(self, x, use_sk=True):
-        x = self.encoder(x)
-        x_q, rq_loss, indices = self.rq(x,use_sk=use_sk)
+    def forward(self, x, use_sk=True, return_z=True):
+        z = self.encoder(x)                          # (B, e_dim) — latent before quantization
+        x_q, rq_loss, indices = self.rq(z, use_sk=use_sk)
         out = self.decoder(x_q)
 
+        if return_z:
+            return out, rq_loss, indices, z
         return out, rq_loss, indices
 
     @torch.no_grad()

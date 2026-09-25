@@ -1,16 +1,24 @@
 """
-build_transition_graph.py — Step 1 of TA-SID pipeline
+build_transition_graph.py — Step 1 of TA-SID pipeline + Track B transition pairs
 
 Builds a PPMI-weighted item co-occurrence matrix from user behavior sequences,
-then applies Truncated SVD to produce 128-dim Behavior Embeddings.
+then applies Truncated SVD to produce 128-dim Behavior Embeddings (Track A).
+
+Also provides extract_transition_pairs() for Track B contrastive loss:
+    consecutive item pairs from user behavior sequences.
 
 Usage:
+    # Track A: build behavior embeddings
     python rqvae/build_transition_graph.py --dataset Beauty
+
+    # Track B: extract transition pairs
+    python rqvae/build_transition_graph.py --dataset Beauty --mode pairs
 """
 
 import argparse
 import warnings
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -22,7 +30,7 @@ warnings.filterwarnings("ignore")
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Build Behavior Embeddings via PPMI + SVD from user sequences."
+        description="Build Behavior Embeddings or extract transition pairs."
     )
     parser.add_argument(
         "--dataset",
@@ -53,6 +61,20 @@ def parse_args():
         type=int,
         default=1,
         help="Minimum co-occurrence count to keep an edge (default: 1)",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="behavior",
+        choices=["behavior", "pairs"],
+        help="'behavior' → PPMI+SVD behavior embeddings (Track A); "
+             "'pairs' → extract transition pairs (Track B, default: behavior)",
+    )
+    parser.add_argument(
+        "--output_suffix",
+        type=str,
+        default="",
+        help="Suffix for output files (e.g., '_768d')",
     )
     return parser.parse_args()
 
@@ -123,13 +145,74 @@ def compute_ppmi(C: csr_matrix) -> csr_matrix:
     return csr_matrix((ppmi, (C_coo.row, C_coo.col)), shape=C.shape)
 
 
+def extract_transition_pairs(
+    data_dir: str, dataset: str, suffix: str = ""
+) -> np.ndarray:
+    """Extract consecutive item transition pairs from user behavior sequences.
+
+    For each user sequence [item_a, item_b, item_c, ...], outputs directed pairs
+    (item_a → item_b), (item_b → item_c), ... These are the positive pairs for
+    Track B's contrastive loss L_trans.
+
+    Returns:
+        (N, 2) int64 array, each row = (anchor_idx, positive_idx)
+    """
+    data_root = f"{data_dir}/{dataset}"
+    train_path = f"{data_root}/train.parquet"
+    item_emb_path = f"{data_root}/item_emb{suffix}.parquet"
+
+    # Load canonical item list
+    item_df = pd.read_parquet(item_emb_path)
+    all_item_ids = item_df["ItemID"].values
+    item_id_to_idx = {iid: idx for idx, iid in enumerate(all_item_ids)}
+
+    # Load sequences
+    train_df = pd.read_parquet(train_path)
+
+    pairs = []
+    for _, row in train_df.iterrows():
+        seq = list(row["history"]) + [row["target"]]
+        mapped = [item_id_to_idx[iid] for iid in seq if iid in item_id_to_idx]
+        for i in range(len(mapped) - 1):
+            pairs.append([mapped[i], mapped[i + 1]])
+
+    return np.array(pairs, dtype=np.int64)
+
+
 def main():
     args = parse_args()
 
+    if args.mode == "pairs":
+        _run_extract_pairs(args)
+    else:
+        _run_behavior_emb(args)
+
+
+def _run_extract_pairs(args):
+    """Track B: extract transition pairs and save to file."""
+    print(f"[Track B] Extracting transition pairs for {args.dataset}...")
+    pairs = extract_transition_pairs(args.data_dir, args.dataset, args.output_suffix)
+
+    save_dir = Path(args.data_dir) / args.dataset
+    save_dir.mkdir(parents=True, exist_ok=True)
+    out_path = save_dir / f"transition_pairs{args.output_suffix}.npy"
+
+    np.save(out_path, pairs)
+    print(f"  ✓ Saved {out_path}")
+    print(f"    Shape: {pairs.shape} ({len(pairs)} transition pairs)")
+    print(f"    Unique anchor items: {len(np.unique(pairs[:, 0]))}")
+    print(f"    Unique positive items: {len(np.unique(pairs[:, 1]))}")
+    if len(pairs) > 0:
+        print(f"    Avg pairs/item:  {len(pairs) / len(np.unique(pairs)):.1f}")
+
+
+def _run_behavior_emb(args):
+    """Original Track A: PPMI + SVD → behavior_emb.parquet"""
+    suffix = args.output_suffix
     data_root = f"{args.data_dir}/{args.dataset}"
     train_path = f"{data_root}/train.parquet"
-    item_emb_path = f"{data_root}/item_emb.parquet"
-    output_path = f"{data_root}/behavior_emb.parquet"
+    item_emb_path = f"{data_root}/item_emb{suffix}.parquet"
+    output_path = f"{data_root}/behavior_emb{suffix}.parquet"
 
     # ---- 1. Load canonical item list from item_emb.parquet ----
     print(f"[1/5] Loading canonical item list from {item_emb_path}")

@@ -35,22 +35,22 @@ DATASETS = {
     "Beauty": {
         "data_dir": "Beauty",
         "ckpt_tag": "Beauty_TA_SID",
-        "npy_file": "Beauty_ta_sid.npy",
+        "npy_file": "Beauty_ta_sid_768d_sid.npy",
         "fused_emb": "fused_item_emb.parquet",
         "baseline_npy": None,  # 没有
     },
     "Sport": {
         "data_dir": "Sport",
-        "ckpt_tag": "Sport_TA_SID",
-        "npy_file": "Sport_ta_sid.npy",
-        "fused_emb": "fused_item_emb.parquet",
+        "ckpt_tag": "Sport_TA_SID_768d",
+        "npy_file": "Sport_ta_sid_768d_sid.npy",
+        "fused_emb": "fused_item_emb_768d.parquet",
         "baseline_npy": None,
     },
     "Toys": {
         "data_dir": "Toys",
-        "ckpt_tag": "Toys_TA_SID",
-        "npy_file": "Toys_ta_sid.npy",
-        "fused_emb": "fused_item_emb.parquet",
+        "ckpt_tag": "Toys_TA_SID_768d",
+        "npy_file": "Toys_ta_sid_768d_sid.npy",
+        "fused_emb": "fused_item_emb_768d.parquet",
         "baseline_npy": None,
     },
 }
@@ -117,7 +117,7 @@ def compute_utilization(model_path: str, fused_emb_path: str, device: str = "cpu
     all_data = all_data.float()
 
     with torch.no_grad():
-        _, _, all_indices = model(all_data, use_sk=False)
+        _, _, all_indices = model(all_data, use_sk=False, return_z=False)
         # all_indices: (N, num_layers) — 每个 item 每层的 codeword 索引
 
     n_layers = all_indices.shape[-1]
@@ -240,8 +240,8 @@ def compute_invalid_id_rate(ds_name: str):
     # 查找对应日志文件
     ds_dirs = {
         "Beauty": "tiger_ta_sid.log",
-        "Sport": "tiger_ta_sid_sport.log",
-        "Toys": "tiger_ta_sid_toys.log",
+        "Sport": "tiger_ta_sid_sport_768d.log",
+        "Toys": "tiger_ta_sid_Toys_768d.log",
     }
 
     log_file = os.path.join(LOG_DIR, ds_dirs.get(ds_name, ""))

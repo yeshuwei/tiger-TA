@@ -26,8 +26,7 @@ def parse_args():
         description="Generate 768d content embeddings from raw Amazon review JSON"
     )
     parser.add_argument("--dataset", type=str, required=True,
-                        choices=["Beauty", "Sport", "Toys"],
-                        help="Dataset name")
+                        help="Dataset name (e.g. Beauty / Sport / Toys / Video_Games)")
     parser.add_argument("--raw_data_dir", type=str,
                         default="/data/gtx/project/datasets/tiger_beauty",
                         help="Root dir containing raw dataset directories")
@@ -51,6 +50,11 @@ def main():
         "Beauty": "Beauty_5.json",
         "Sport": "Sports_and_Outdoors_5.json",
         "Toys": "Toys_and_Games_5.json",
+        "Video_Games": "reviews_Video_Games_5.json",
+        "Home_and_Kitchen": "Home_and_Kitchen_5.json",
+        "Cell_Phones_and_Accessories": "Cell_Phones_and_Accessories_5.json",
+        "Electronics": "reviews_Electronics_5.json",
+        "Musical_Instruments": "Musical_Instruments_5.json",
     }
     json_path = os.path.join(raw_dir, json_name_map.get(ds, f"{ds}.json"))
     if not os.path.exists(json_path):

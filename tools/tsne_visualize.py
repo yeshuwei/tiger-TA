@@ -91,7 +91,7 @@ def plot_tsne(emb: np.ndarray, item_ids: np.ndarray, group_dict: dict,
         print(f"  ℹ️  采样 {n_sample}/{n_total} 个点进行 t-SNE")
 
     print(f"  🔄 t-SNE  降维到 2D ... ", end="", flush=True)
-    tsne = TSNE(n_components=2, random_state=42, perplexity=30, max_iter=1000,
+    tsne = TSNE(n_components=2, random_state=42, perplexity=30, n_iter=1000,
                 verbose=0, learning_rate="auto")
     emb_2d = tsne.fit_transform(emb)
     print("done")
@@ -134,25 +134,41 @@ def main():
     parser.add_argument("--dataset", type=str, required=True,
                         choices=["Beauty", "Sport", "Toys"])
     parser.add_argument("--data_dir", type=str, default="data")
-    parser.add_argument("--output_dir", type=str, default="doc/figures",
-                        help="图片输出目录")
+    parser.add_argument("--output_dir", type=str, default="doc/figures/tsne",
+                        help="图片输出基目录，每次运行自动创建 {output_dir}/{run_tag}/ 子目录")
+    parser.add_argument("--run_tag", type=str, default=None,
+                        help="本次运行的标签（用于创建子目录区分不同批次）。默认自动生成时间戳")
+    parser.add_argument("--dim", type=str, default=None,
+                        help="嵌入维度后缀，如 '768d' 则加载 item_emb_768d.parquet。默认加载 item_emb.parquet")
     parser.add_argument("--n_sample", type=int, default=2000,
                         help="t-SNE 采样点数（控制运行时间）")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     ds = args.dataset
+    dim_tag = f"_{args.dim}" if args.dim else ""
+
+    # 时间戳子目录，确保每次生成结果不覆盖
+    from datetime import datetime
+    if args.run_tag is None:
+        run_tag = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    else:
+        run_tag = args.run_tag
+    output_dir = os.path.join(args.output_dir, run_tag)
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"输出目录: {output_dir}")
+
     data_path = os.path.join(args.data_dir, ds)
-    os.makedirs(args.output_dir, exist_ok=True)
 
     print("=" * 60)
     print(f"t-SNE 可视化: {ds}")
     print("=" * 60)
 
-    # 检查文件
-    content_path = os.path.join(data_path, "item_emb.parquet")
-    behavior_path = os.path.join(data_path, "behavior_emb.parquet")
-    fused_path = os.path.join(data_path, "fused_item_emb.parquet")
+    # 检查文件（支持维度后缀）
+    dim_suffix = f"_{args.dim}" if args.dim else ""
+    content_path = os.path.join(data_path, f"item_emb{dim_suffix}.parquet")
+    behavior_path = os.path.join(data_path, "behavior_emb.parquet")  # behavior 不分维度
+    fused_path = os.path.join(data_path, f"fused_item_emb{dim_suffix}.parquet")
     train_path = os.path.join(data_path, "train.parquet")
 
     for p in [content_path, behavior_path, fused_path, train_path]:
@@ -191,7 +207,7 @@ def main():
     plot_tsne(
         content_emb, content_ids, group_dict,
         title=f"{ds} — Content Embedding (t-SNE)",
-        save_path=os.path.join(args.output_dir, f"{ds.lower()}_tsne_content.png"),
+        save_path=os.path.join(output_dir, f"{ds.lower()}{dim_tag}_tsne_content.png"),
         n_sample=args.n_sample,
     )
 
@@ -199,7 +215,7 @@ def main():
     plot_tsne(
         behavior_emb, behavior_ids, group_dict,
         title=f"{ds} — Behavior Embedding (t-SNE)",
-        save_path=os.path.join(args.output_dir, f"{ds.lower()}_tsne_behavior.png"),
+        save_path=os.path.join(output_dir, f"{ds.lower()}{dim_tag}_tsne_behavior.png"),
         n_sample=args.n_sample,
     )
 
@@ -207,7 +223,7 @@ def main():
     plot_tsne(
         fused_emb, fused_ids, group_dict,
         title=f"{ds} — Fused Embedding (t-SNE)",
-        save_path=os.path.join(args.output_dir, f"{ds.lower()}_tsne_fused.png"),
+        save_path=os.path.join(output_dir, f"{ds.lower()}{dim_tag}_tsne_fused.png"),
         n_sample=args.n_sample,
     )
 
@@ -220,10 +236,10 @@ def main():
         print(f"  {name:10s}: mean={norms.mean():.4f}, std={norms.std():.4f}, "
               f"min={norms.min():.4f}, max={norms.max():.4f}")
 
-    print(f"\n✅ 全部完成! 图片保存在 {args.output_dir}/")
-    print(f"   {ds.lower()}_tsne_content.png")
-    print(f"   {ds.lower()}_tsne_behavior.png")
-    print(f"   {ds.lower()}_tsne_fused.png")
+    print(f"\n✅ 全部完成! 图片保存在 {output_dir}/")
+    print(f"   {ds.lower()}{dim_tag}_tsne_content.png")
+    print(f"   {ds.lower()}{dim_tag}_tsne_behavior.png")
+    print(f"   {ds.lower()}{dim_tag}_tsne_fused.png")
 
 
 if __name__ == "__main__":

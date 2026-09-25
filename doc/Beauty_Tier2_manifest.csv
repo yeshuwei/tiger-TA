@@ -1,0 +1,19 @@
+Variant,seed,ckpt_path,train_log,eval_log,eval_finished_at,NDCG@20,source
+TA-SID,2025,model/ckpt/tiger_ta_sid_768d_beauty_seed2025.pth,,model/logs/Beauty_ta_sid_768d_seed2025_eval.log,2026-08-03 10:24:00,0.0418,已有（未重跑）
+TA-SID,2026,model/ckpt/tiger_ta_sid_768d_beauty_seed2026.pth,model/logs/Beauty_ta_sid_768d_seed2026_t5_train.log,model/logs/Beauty_ta_sid_768d_seed2026_eval.log,2026-08-02 05:40:42,0.0425,已有（未重跑）
+TA-SID,2027,model/ckpt/tiger_ta_sid_768d_beauty_seed2027.pth,model/logs/Beauty_ta_sid_768d_seed2027_t5_train.log,model/logs/Beauty_ta_sid_768d_seed2027_eval.log,2026-08-02 06:41:41,0.0403,已有（未重跑）
+ItemCF,2025,model/ckpt/tiger_itemcf_768d_beauty_seed2025.pth,model/logs/Beauty_itemcf_768d_seed2025_t5_train.log,model/logs/Beauty_itemcf_768d_seed2025_eval.log,2026-09-24 12:47:46,0.0383,Tier-2 新补
+ItemCF,2026,model/ckpt/tiger_itemcf_768d_beauty_seed2026.pth,model/logs/Beauty_itemcf_768d_seed2026_t5_train.log,model/logs/Beauty_itemcf_768d_seed2026_eval.log,2026-09-24 13:58:29,0.0389,Tier-2 新补
+ItemCF,2027,model/ckpt/tiger_itemcf_768d_beauty_seed2027.pth,model/logs/Beauty_itemcf_768d_seed2027_t5_train.log,model/logs/Beauty_itemcf_768d_seed2027_eval.log,2026-09-24 15:26:50,0.0402,Tier-2 新补
+Raw-CoOcc,2025,model/ckpt/tiger_rawcooc_768d_beauty_seed2025.pth,model/logs/Beauty_rawcooc_768d_seed2025_t5_train.log,model/logs/Beauty_rawcooc_768d_seed2025_eval.log,2026-09-24 09:23:29,0.038,Tier-2 新补
+Raw-CoOcc,2026,model/ckpt/tiger_rawcooc_768d_beauty_seed2026.pth,model/logs/Beauty_rawcooc_768d_seed2026_t5_train.log,model/logs/Beauty_rawcooc_768d_seed2026_eval.log,2026-09-24 10:23:01,0.04,Tier-2 新补
+Raw-CoOcc,2027,model/ckpt/tiger_rawcooc_768d_beauty_seed2027.pth,model/logs/Beauty_rawcooc_768d_seed2027_t5_train.log,model/logs/Beauty_rawcooc_768d_seed2027_eval.log,2026-09-24 11:35:39,0.0382,Tier-2 新补
+ZeroPad,2025,model/ckpt/tiger_zeropad_768d_beauty_seed2025.pth,model/logs/Beauty_zeropad_768d_seed2025_t5_train.log,model/logs/Beauty_zeropad_768d_seed2025_eval.log,2026-09-24 20:00:09,0.0372,Tier-2 新补
+ZeroPad,2026,model/ckpt/tiger_zeropad_768d_beauty_seed2026.pth,model/logs/Beauty_zeropad_768d_seed2026_t5_train.log,model/logs/Beauty_zeropad_768d_seed2026_eval.log,2026-09-24 21:03:38,0.0371,Tier-2 新补
+ZeroPad,2027,model/ckpt/tiger_zeropad_768d_beauty_seed2027.pth,model/logs/Beauty_zeropad_768d_seed2027_t5_train.log,model/logs/Beauty_zeropad_768d_seed2027_eval.log,2026-09-24 22:08:18,0.0379,Tier-2 新补
+Content-only,2025,model/ckpt/tiger_content768d_baseline_beauty_seed2025.pth,,model/logs/Beauty_content768d_baseline_seed2025_eval.log,2026-07-31 21:37:31,0.0368,已有（未重跑）
+Content-only,2026,model/ckpt/tiger_content768d_baseline_beauty_seed2026.pth,model/logs/Beauty_content768d_baseline_seed2026_t5_train.log,model/logs/Beauty_content768d_baseline_seed2026_eval.log,2026-08-01 23:21:28,0.0352,已有（未重跑）
+Content-only,2027,model/ckpt/tiger_content768d_baseline_beauty_seed2027.pth,model/logs/Beauty_content768d_baseline_seed2027_t5_train.log,model/logs/Beauty_content768d_baseline_seed2027_eval.log,2026-08-02 00:21:40,0.0354,已有（未重跑）
+Shuffled,2025,model/ckpt/tiger_shuffled_768d_beauty_seed2025.pth,model/logs/Beauty_shuffled_768d_seed2025_t5_train.log,model/logs/Beauty_shuffled_768d_seed2025_eval.log,2026-09-24 16:40:22,0.0348,Tier-2 新补
+Shuffled,2026,model/ckpt/tiger_shuffled_768d_beauty_seed2026.pth,model/logs/Beauty_shuffled_768d_seed2026_t5_train.log,model/logs/Beauty_shuffled_768d_seed2026_eval.log,2026-09-24 17:55:53,0.0352,Tier-2 新补
+Shuffled,2027,model/ckpt/tiger_shuffled_768d_beauty_seed2027.pth,model/logs/Beauty_shuffled_768d_seed2027_t5_train.log,model/logs/Beauty_shuffled_768d_seed2027_eval.log,2026-09-24 18:57:32,0.0337,Tier-2 新补

@@ -1,0 +1,3 @@
+Collision Rate: 0.000419
+Total items: 11924
+Unique indices: 11919

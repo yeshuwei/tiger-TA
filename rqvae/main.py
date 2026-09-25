@@ -42,15 +42,30 @@ def parse_args():
     parser.add_argument("--beta", type=float, default=0.25, help="Beta for commitment loss")
     parser.add_argument('--layers', type=int, nargs='+', default=[512,256,128,64], help='hidden sizes of every layer')
     parser.add_argument('--save_limit', type=int, default=5, help='save limit for ckpt')
-    
+
+    parser.add_argument('--seed', type=int, default=2024,
+                        help='global random seed (2024 = legacy default, reproduces all prior RQ-VAE runs)')
+
     parser.add_argument("--ckpt_dir", type=str, default=f"./ckpt/{DATASET}", help="please specify output directory for model")
+
+    # ========== Track B: Transition-aware Contrastive Learning ==========
+    parser.add_argument("--lambda_trans", type=float, default=0.0,
+                        help="L_trans weight (0 = disabled, Track A mode; >0 = Track B)")
+    parser.add_argument("--lambda_balance", type=float, default=0.0,
+                        help="L_balance weight for codebook balance (0 = disabled)")
+    parser.add_argument("--tau", type=float, default=0.1,
+                        help="temperature for contrastive loss")
+    parser.add_argument("--trans_graph_path", type=str, default=None,
+                        help="path to transition_pairs.npy (required if lambda_trans > 0)")
 
     return parser.parse_args()
 
 
 if __name__ == '__main__':
+    args = parse_args()
+
     """fix the random seed"""
-    seed = 2024
+    seed = args.seed
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -58,7 +73,6 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    args = parse_args()
     print("=================================================")
     print(args)
     print("=================================================")
@@ -66,7 +80,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     """build dataset"""
-    data = EmbDataset(args.data_path)
+    is_track_b = args.lambda_trans > 0 or args.lambda_balance > 0
+    data = EmbDataset(args.data_path, return_index=is_track_b)
     model = RQVAE(in_dim=data.dim,
                   num_emb_list=args.num_emb_list,
                   e_dim=args.e_dim,

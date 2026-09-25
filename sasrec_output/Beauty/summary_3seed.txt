@@ -1,0 +1,11 @@
+# SASRec Beauty — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.012246	0.018733	0.025574	0.023610	0.043822	0.071144	(best epoch 120)
+2026	0.011364	0.017365	0.024471	0.022314	0.040961	0.069221	(best epoch 180)
+2027	0.012642	0.018894	0.026222	0.024371	0.043912	0.073067	(best epoch 180)
+
+mean	0.012084	0.018330	0.025422	0.023432	0.042898	0.071144
+std	0.000534	0.000686	0.000723	0.000849	0.001371	0.001570

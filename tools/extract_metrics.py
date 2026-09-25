@@ -22,18 +22,22 @@ import argparse
 # ============================================================
 LOG_MAP = [
     # (日志文件名, 数据集, 方法名, 种子)
-    # --- Beauty ---
-    ("tiger.log",                        "Beauty", "TIGER",  2025),
-    ("tiger_ta_sid.log",                 "Beauty", "TA-SID", 2025),
-    ("tiger_ta_sid_beauty_seed42.log",   "Beauty", "TA-SID", 42),
-    # --- Sports ---
-    ("sports.log",                       "Sports", "TIGER",  2025),
-    ("tiger_ta_sid_sport.log",           "Sports", "TA-SID", 2025),
-    ("tiger_ta_sid_sport_seed42.log",    "Sports", "TA-SID", 42),
-    # --- Toys ---
-    ("toys.log",                         "Toys",   "TIGER",  2025),
-    ("tiger_ta_sid_toys.log",            "Toys",   "TA-SID", 2025),
-    ("tiger_ta_sid_toys_seed42.log",     "Toys",   "TA-SID", 42),
+    # --- Beauty (768d, 896d fused) ---
+    ("tiger.log",                        "Beauty", "TIGER",     2025),
+    ("tiger_ta_sid.log",                 "Beauty", "TA-SID",    2025),
+    ("tiger_ta_sid_beauty_seed42.log",   "Beauty", "TA-SID",    42),
+    # --- Sport (主实验: 768d, 896d fused) ---
+    ("sports.log",                       "Sport",  "TIGER",     2025),
+    ("tiger_ta_sid_sport_768d.log",      "Sport",  "TA-SID",    2025),
+    # --- Sport 4096d (Robustness对照) ---
+    ("tiger_ta_sid_sport.log",           "Sport",  "TA-SID(4096d)", 2025),
+    ("tiger_ta_sid_sport_seed42.log",    "Sport",  "TA-SID(4096d)", 42),
+    # --- Toys (主实验: 768d, 896d fused) ---
+    ("toys.log",                         "Toys",   "TIGER",     2025),
+    ("tiger_ta_sid_Toys_768d.log",       "Toys",   "TA-SID",    2025),
+    # --- Toys 4096d (Robustness对照) ---
+    ("tiger_ta_sid_toys.log",            "Toys",   "TA-SID(4096d)", 2025),
+    ("tiger_ta_sid_toys_seed42.log",     "Toys",   "TA-SID(4096d)", 42),
 ]
 
 
@@ -64,7 +68,25 @@ def extract_metrics(log_path: str):
     )
 
     if not recall_lines or not ndcg_lines:
-        return None, None
+        # 回退：tools/eval_trained_model.py 的【表格格式】（如 *_eval.log）。
+        #   格式:
+        #     Metric          @5         @10        @20
+        #     ------------------------------------------------
+        #     NDCG            0.0192     0.0254     0.0327
+        #     Recall          0.0298     0.0490     0.0781
+        #   @5/@10/@20 恒为按升序排列的前三列（@50/@100 若存在会排在后面），
+        #   故取前三列即可，无需额外依赖表头解析。
+        tbl = {}
+        for metric in ("NDCG", "Recall"):
+            m = re.findall(rf"^\s*{metric}\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)",
+                           content, re.MULTILINE)
+            if m:
+                tbl[metric] = m[-1]
+        if not ("NDCG" in tbl and "Recall" in tbl):
+            return None, None
+        recall_dict = {f'Recall@{k}': float(v) for k, v in zip((5, 10, 20), tbl["Recall"])}
+        ndcg_dict = {f'NDCG@{k}': float(v) for k, v in zip((5, 10, 20), tbl["NDCG"])}
+        return recall_dict, ndcg_dict
 
     # 取最后一次评估的结果
     last_recall = recall_lines[-1]
@@ -106,7 +128,7 @@ def format_markdown(results: list) -> str:
 
 def format_summary(results: list) -> str:
     """生成简化的汇总表（基线 vs TA-SID 对比）"""
-    # 只保留 seed=2025 的结果
+    # 只保留 seed=2025 且方法是 TIGER 或 TA-SID（不含4096d对照）
     baseline_ta = [(ds, method, seed, rec, ndcg)
                    for ds, method, seed, rec, ndcg in results
                    if seed == 2025 and method in ('TIGER', 'TA-SID')]
@@ -120,7 +142,7 @@ def format_summary(results: list) -> str:
     baselines = {r[0]: r for r in baseline_ta if r[1] == 'TIGER'}
     ta_sids = {r[0]: r for r in baseline_ta if r[1] == 'TA-SID'}
 
-    for ds in ['Beauty', 'Sports', 'Toys']:
+    for ds in ['Beauty', 'Sport', 'Toys']:
         if ds in baselines and ds in ta_sids:
             b = baselines[ds]
             t = ta_sids[ds]
@@ -200,7 +222,7 @@ def main():
     print("\n" + "=" * 80)
     print("按数据集分开展示")
     print("=" * 80)
-    datasets = ['Beauty', 'Sports', 'Toys']
+    datasets = ['Beauty', 'Sport', 'Toys']
     for ds in datasets:
         ds_results = [r for r in results if r[0] == ds]
         if not ds_results:

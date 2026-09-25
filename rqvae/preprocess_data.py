@@ -43,6 +43,10 @@ def main():
     json_name_map = {
         "Sport": "Sports_and_Outdoors_5.json",
         "Toys": "Toys_and_Games_5.json",
+        "Beauty": "Beauty_5.json",
+        "Musical_Instruments": "Musical_Instruments_5.json",
+        "Electronics": "reviews_Electronics_5.json",
+        "Video_Games": "reviews_Video_Games_5.json",
     }
     json_path = os.path.join(raw_dir, json_name_map.get(ds, f"{ds}.json"))
     if not os.path.exists(json_path):
