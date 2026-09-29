@@ -58,13 +58,24 @@ class RQVAE(nn.Module):
         self.decoder = MLPLayers(layers=self.decode_layer_dims,
                                        dropout=self.dropout_prob,bn=self.bn)
 
-    def forward(self, x, use_sk=True, return_z=True):
+    def forward(self, x, use_sk=True, return_z=True, return_xq=False):
+        """return_xq=True 时额外返回量化表示 x_q（E50 b2 的 L_align 需要）。
+
+        ⚠️ 必须用这里返回的 x_q，**不要**在外部用 codebook_w[vq_indices] 重新 gather：
+        x_q 是各层 VectorQuantizer 经 straight-through（vq.py: `x + (x_q - x).detach()`）
+        累加得到的，带有回流到 encoder 的梯度；重新 gather 会把这条梯度路径切断，
+        梯度只到码本、到不了 encoder。默认 False，既有调用方行为不变。
+        """
         z = self.encoder(x)                          # (B, e_dim) — latent before quantization
         x_q, rq_loss, indices = self.rq(z, use_sk=use_sk)
         out = self.decoder(x_q)
 
+        if return_z and return_xq:
+            return out, rq_loss, indices, z, x_q
         if return_z:
             return out, rq_loss, indices, z
+        if return_xq:
+            return out, rq_loss, indices, x_q
         return out, rq_loss, indices
 
     @torch.no_grad()

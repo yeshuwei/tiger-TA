@@ -226,7 +226,7 @@ class Trainer(object):
 
         return self.contrastive_loss(x_q, anchor_tensor, pos_tensor)
 
-    def _get_align_loss(self, vq_indices, batch_indices):
+    def _get_align_loss(self, x_q, batch_indices):
         """E50 b2: InfoNCE 对齐 —— 把量化表示拉向目标嵌入（LETTER eq.3 形式）。
 
             L_align = -1/B Σ_i log[ exp(⟨w_i, h_i⟩/τ) / Σ_j exp(⟨w_i, h_j⟩/τ) ]
@@ -242,26 +242,20 @@ class Trainer(object):
              故按 ‖h‖ < 1e-6 直接 mask 掉，不计入损失。
 
         Args:
-            vq_indices: (B, num_layers) 量化码本下标
+            x_q: (B, e_dim) 模型内部的量化表示（**必须**取自 forward(return_xq=True)，
+                 它带有经 straight-through 回流到 encoder 的梯度）
             batch_indices: (B,) 该 batch 在 parquet 中的行号
 
         Returns:
             scalar loss（无有效行时返回 0）
         """
-        zero = torch.tensor(0.0, device=vq_indices.device, dtype=torch.float32)
-        if self.align_table is None or self.align_proj is None:
+        zero = torch.tensor(0.0, device=x_q.device, dtype=torch.float32)
+        if self.align_table is None or self.align_proj is None or x_q is None:
             return zero
 
-        B = vq_indices.shape[0]
+        B = x_q.shape[0]
         if B < 2:
             return zero
-
-        # 从码本重建 x_q（与 rq.forward() / _get_transition_loss 同一构造）
-        num_layers = vq_indices.shape[1]
-        x_q = torch.zeros(B, self.model.e_dim, device=vq_indices.device)
-        for layer in range(num_layers):
-            codebook_w = self.model.rq.vq_layers[layer].embedding.weight  # (K, e_dim)
-            x_q = x_q + codebook_w[vq_indices[:, layer]]                  # (B, e_dim)
 
         # 按行号 gather 目标嵌入（EmbDataset 的 index 就是 parquet 行号）
         idx = batch_indices
@@ -318,10 +312,18 @@ class Trainer(object):
 
             # Forward: get reconstruction + latent z (if Track B)
             if is_track_b:
-                out, rq_loss, vq_indices, z = self.model(data, return_z=True)
+                if self.align_weight > 0:
+                    # b2 额外取 x_q —— 必须是模型内部那条 straight-through 的
+                    # 张量，而非外部重新 gather（否则梯度到不了 encoder）
+                    out, rq_loss, vq_indices, z, x_q = self.model(
+                        data, return_z=True, return_xq=True)
+                else:
+                    out, rq_loss, vq_indices, z = self.model(data, return_z=True)
+                    x_q = None
             else:
                 # Track A: 3-value return for backward compatibility
                 out, rq_loss, vq_indices = self.model(data, return_z=False)
+                x_q = None
 
             # Base loss (reconstruction + VQ commitment)
             loss, loss_recon = self.model.compute_loss(out, rq_loss, xs=data)
@@ -345,7 +347,7 @@ class Trainer(object):
             # L_align (E50 b2)
             loss_align = torch.tensor(0.0, device=self.device)
             if self.align_weight > 0 and batch_indices is not None:
-                loss_align = self._get_align_loss(vq_indices, batch_indices)
+                loss_align = self._get_align_loss(x_q, batch_indices)
                 if loss_align.requires_grad and torch.isfinite(loss_align):
                     loss = loss + self.align_weight * loss_align
 
