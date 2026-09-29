@@ -58,6 +58,16 @@ def parse_args():
     parser.add_argument("--trans_graph_path", type=str, default=None,
                         help="path to transition_pairs.npy (required if lambda_trans > 0)")
 
+    # ========== E50 b2: L_align — 对齐量化表示与目标嵌入 ==========
+    # 见 doc/exp/ab_decision_and_design.md §3.2(b2) / §4.1 / §4.2
+    parser.add_argument("--align_weight", type=float, default=0.0,
+                        help="L_align weight (0 = disabled; 默认 0 保证既有实验零影响)")
+    parser.add_argument("--align_data_path", type=str, default=None,
+                        help="目标嵌入 parquet（b2 用 data/{D}/behavior_emb.parquet）。"
+                             "必须与 --data_path 行序一致（EmbDataset 用行号索引）。")
+    parser.add_argument("--align_tau", type=float, default=0.1,
+                        help="L_align InfoNCE 温度（固定 0.1，不扫）")
+
     return parser.parse_args()
 
 
@@ -80,7 +90,9 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     """build dataset"""
-    is_track_b = args.lambda_trans > 0 or args.lambda_balance > 0
+    # 任一辅助损失开启，dataloader 就要返回 (row_index, emb) 供按行 gather
+    is_track_b = (args.lambda_trans > 0 or args.lambda_balance > 0
+                  or args.align_weight > 0)
     data = EmbDataset(args.data_path, return_index=is_track_b)
     model = RQVAE(in_dim=data.dim,
                   num_emb_list=args.num_emb_list,

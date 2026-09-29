@@ -2,7 +2,10 @@ import logging
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from time import time
 from torch import optim
 from tqdm import tqdm
@@ -45,6 +48,36 @@ class Trainer(object):
         self.best_collision_rate = np.inf
         self.best_loss_ckpt = "best_loss_model.pth"
         self.best_collision_ckpt = "best_collision_model.pth"
+
+        # ---- E50 b2: L_align ----------------------------------------------
+        # 必须在 _build_optimizer() **之前**建好，否则 W 进不了优化器。
+        # align_weight == 0 时 self.align_proj is None，下面每条路径（optimizer
+        # 参数、前向返回、clip_grad、ckpt）都与改 b2 之前的 trainer 逐位一致
+        # —— 这是 doc/exp/ab_decision_and_design.md §4.1 尾注的回归门禁。
+        self.align_weight = getattr(args, 'align_weight', 0.0)
+        self.align_tau = getattr(args, 'align_tau', 0.1)
+        self.align_proj = None
+        self.align_table = None
+        self.align_num_dropped = 0
+        if self.align_weight > 0:
+            align_path = getattr(args, 'align_data_path', None)
+            if not align_path or not os.path.exists(align_path):
+                raise FileNotFoundError(
+                    f"align_weight={self.align_weight} 但 align_data_path 不可用: {align_path}"
+                )
+            align_df = pd.read_parquet(align_path)
+            align_np = np.stack(align_df['embedding'].values).astype(np.float32)
+            # 常驻 CPU，按 batch 行号 gather 后再搬上 device（见 _get_align_loss）
+            self.align_table = torch.from_numpy(align_np)
+            # ⚠️ 投影头是**维度所迫**，不是设计选择：x_q 只有 e_dim(=32) 维，
+            #    而目标 h 是 128 维，不加投影 ⟨x_q, h⟩ 无量纲定义。
+            self.align_proj = nn.Linear(model.e_dim, align_np.shape[1], bias=False).to(self.device)
+            self.logger.info(
+                f"[L_align] weight={self.align_weight} tau={self.align_tau} "
+                f"target={align_path} dim={align_np.shape[1]} "
+                f"proj={model.e_dim}->{align_np.shape[1]}"
+            )
+
         self.optimizer = self._build_optimizer()
         self.scheduler = self._get_scheduler()
         self.model = self.model.to(self.device)
@@ -85,6 +118,9 @@ class Trainer(object):
 
     def _build_optimizer(self):
         params = self.model.parameters()
+        if getattr(self, 'align_proj', None) is not None:
+            # 只有 b2 才把投影头加进来；align_weight=0 时走原样路径
+            params = list(params) + list(self.align_proj.parameters())
         learner = self.learner
         learning_rate = self.lr
         weight_decay = self.weight_decay
@@ -190,6 +226,66 @@ class Trainer(object):
 
         return self.contrastive_loss(x_q, anchor_tensor, pos_tensor)
 
+    def _get_align_loss(self, vq_indices, batch_indices):
+        """E50 b2: InfoNCE 对齐 —— 把量化表示拉向目标嵌入（LETTER eq.3 形式）。
+
+            L_align = -1/B Σ_i log[ exp(⟨w_i, h_i⟩/τ) / Σ_j exp(⟨w_i, h_j⟩/τ) ]
+
+        其中（同 batch 内互为负样本）：
+            w_i = normalize(W · x_q,i)     W: e_dim(32) → D(128)，可学习
+            h_i = normalize(h_i)           h = 目标嵌入的第 i 行（不传梯度）
+
+        ⚠️ 两个必须注意的点（见 doc/exp/ab_decision_and_design.md §4.2）：
+          A) x_q 只有 e_dim=32 维，h 是 128 维 ⇒ 投影 W 不可省，否则点积无定义。
+          C) 有一批物品的行为向量恒为零（无转移记录的冷启动物品，实测
+             Sport/Toys/Beauty = 28/24/33 行）。normalize 零向量会放大成纯噪声，
+             故按 ‖h‖ < 1e-6 直接 mask 掉，不计入损失。
+
+        Args:
+            vq_indices: (B, num_layers) 量化码本下标
+            batch_indices: (B,) 该 batch 在 parquet 中的行号
+
+        Returns:
+            scalar loss（无有效行时返回 0）
+        """
+        zero = torch.tensor(0.0, device=vq_indices.device, dtype=torch.float32)
+        if self.align_table is None or self.align_proj is None:
+            return zero
+
+        B = vq_indices.shape[0]
+        if B < 2:
+            return zero
+
+        # 从码本重建 x_q（与 rq.forward() / _get_transition_loss 同一构造）
+        num_layers = vq_indices.shape[1]
+        x_q = torch.zeros(B, self.model.e_dim, device=vq_indices.device)
+        for layer in range(num_layers):
+            codebook_w = self.model.rq.vq_layers[layer].embedding.weight  # (K, e_dim)
+            x_q = x_q + codebook_w[vq_indices[:, layer]]                  # (B, e_dim)
+
+        # 按行号 gather 目标嵌入（EmbDataset 的 index 就是 parquet 行号）
+        idx = batch_indices
+        if not torch.is_tensor(idx):
+            idx = torch.as_tensor(list(idx), dtype=torch.long)
+        idx = idx.detach().to(device=self.align_table.device, dtype=torch.long)
+        h = self.align_table[idx].to(x_q.device)                          # (B, D)
+
+        # 丢掉退化行（h == 0 的冷启动物品）
+        keep = h.norm(dim=1) > 1e-6
+        n_keep = int(keep.sum().item())
+        self.align_num_dropped += B - n_keep
+        if n_keep < 2:
+            return zero
+        x_q = x_q[keep]
+        h = h[keep]
+
+        w = F.normalize(self.align_proj(x_q), dim=1)                      # (B', D)
+        h = F.normalize(h.detach(), dim=1)                                # (B', D)，目标不传梯度
+
+        logits = w @ h.t() / self.align_tau
+        labels = torch.arange(logits.shape[0], device=logits.device)
+        return F.cross_entropy(logits, labels)
+
     def _train_epoch(self, train_data, epoch_idx):
         self.model.train()
 
@@ -197,8 +293,10 @@ class Trainer(object):
         total_recon_loss = 0.0
         total_trans_loss = 0.0
         total_balance_loss = 0.0
+        total_align_loss = 0.0
 
-        is_track_b = (self.lambda_trans > 0 or self.lambda_balance > 0)
+        is_track_b = (self.lambda_trans > 0 or self.lambda_balance > 0
+                      or self.align_weight > 0)
 
         iter_data = tqdm(
             train_data,
@@ -244,9 +342,19 @@ class Trainer(object):
                 if loss_balance.requires_grad and torch.isfinite(loss_balance):
                     loss = loss + self.lambda_balance * loss_balance
 
+            # L_align (E50 b2)
+            loss_align = torch.tensor(0.0, device=self.device)
+            if self.align_weight > 0 and batch_indices is not None:
+                loss_align = self._get_align_loss(vq_indices, batch_indices)
+                if loss_align.requires_grad and torch.isfinite(loss_align):
+                    loss = loss + self.align_weight * loss_align
+
             self._check_nan(loss)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            clip_params = self.model.parameters()
+            if self.align_proj is not None:
+                clip_params = list(clip_params) + list(self.align_proj.parameters())
+            torch.nn.utils.clip_grad_norm_(clip_params, 1.0)
             self.optimizer.step()
             self.scheduler.step()
 
@@ -255,15 +363,17 @@ class Trainer(object):
             if is_track_b:
                 total_trans_loss += loss_trans.item() if torch.is_tensor(loss_trans) else 0.0
                 total_balance_loss += loss_balance.item() if torch.is_tensor(loss_balance) else 0.0
+                total_align_loss += loss_align.item() if torch.is_tensor(loss_align) else 0.0
 
-        # Log extra losses for Track B
+        # Log extra losses
         if is_track_b:
-            if total_trans_loss > 0 or total_balance_loss > 0:
+            if total_trans_loss > 0 or total_balance_loss > 0 or total_align_loss > 0:
                 n = len(iter_data)
                 self.logger.info(
                     f"    L_recon={total_recon_loss/n:.4f}, "
                     f"L_trans={total_trans_loss/n:.4f}, "
-                    f"L_balance={total_balance_loss/n:.4f}"
+                    f"L_balance={total_balance_loss/n:.4f}, "
+                    f"L_align={total_align_loss/n:.4f}"
                 )
 
         return total_loss, total_recon_loss
@@ -307,6 +417,15 @@ class Trainer(object):
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
         }
+        # E50 b2: 投影头只存为**顶层键**，不进 state_dict —— 既有 ckpt 读取方
+        # （model.load_state_dict(ck["state_dict"])）完全不受影响。
+        if self.align_proj is not None:
+            state["align_proj"] = self.align_proj.state_dict()
+            state["align_meta"] = {
+                "align_weight": self.align_weight,
+                "align_tau": self.align_tau,
+                "align_data_path": getattr(self.args, 'align_data_path', None),
+            }
         torch.save(state, ckpt_path, pickle_protocol=4)
         self.logger.info(set_color("Saving current", "blue") + f": {ckpt_path}")
         return ckpt_path
