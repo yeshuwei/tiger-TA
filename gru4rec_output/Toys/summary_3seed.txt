@@ -1,0 +1,11 @@
+# GRU4Rec Toys — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.013907	0.016794	0.019418	0.020760	0.029672	0.040181	(best epoch 100)
+2026	0.013992	0.016320	0.018987	0.020297	0.027509	0.038172	(best epoch 120)
+2027	0.013385	0.016194	0.019061	0.019833	0.028539	0.039872	(best epoch 160)
+
+mean	0.013761	0.016436	0.019155	0.020297	0.028573	0.039408
+std	0.000268	0.000258	0.000188	0.000378	0.000883	0.000883

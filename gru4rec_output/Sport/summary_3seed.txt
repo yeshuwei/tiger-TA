@@ -1,0 +1,11 @@
+# GRU4Rec Sport — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.008247	0.010326	0.012644	0.012248	0.018709	0.027923	(best epoch 40)
+2026	0.008332	0.010359	0.012684	0.012360	0.018681	0.027979	(best epoch 40)
+2027	0.009150	0.010993	0.013308	0.013596	0.019355	0.028569	(best epoch 40)
+
+mean	0.008576	0.010559	0.012879	0.012735	0.018915	0.028157
+std	0.000407	0.000307	0.000304	0.000611	0.000311	0.000292

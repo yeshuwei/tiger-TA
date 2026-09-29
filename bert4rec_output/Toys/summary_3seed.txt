@@ -1,0 +1,11 @@
+# BERT4Rec Toys — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.007406	0.009727	0.012478	0.012054	0.019266	0.030239	(best epoch 180)
+2026	0.007653	0.010086	0.012744	0.012312	0.019885	0.030445	(best epoch 200)
+2027	0.008907	0.011673	0.014393	0.013857	0.022512	0.033330	(best epoch 200)
+
+mean	0.007989	0.010495	0.013205	0.012741	0.020554	0.031338
+std	0.000657	0.000846	0.000847	0.000796	0.001407	0.001411

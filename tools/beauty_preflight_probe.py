@@ -1,5 +1,33 @@
 #!/usr/bin/env python3
 """
+⚠️ **已退役（2026-09-27）—— 请改用 `tools/stage_probe.py` 作为单一真理源。**
+================================================================================
+本脚本的全部产出都是 `stage_probe.py` 的**真子集**，且后者口径更完整：
+
+| 本脚本产出 | `stage_probe.py` 中的对应物 |
+|---|---|
+| 6 变体 × A 空间 AUC（pre-flight 排序） | `doc/g2_stage_probe_results.csv` 中 `space == "A"` 的行 |
+| TA-SID legacy 4224d vs 896d 对照 | `python3 tools/stage_probe.py --audit_a` |
+| Content-only ≡ ZeroPad 的等价性证明 | 同 A 空间行（两者输入文件相同，AUC 逐位相同） |
+
+**已核验等价**（rqvae_seed=2024、topk × degmatch、A 空间）：
+```
+              Content-only  ItemCF  Raw-CoOcc  Shuffled  TA-SID  ZeroPad
+Beauty              0.8368  0.9782     0.9088    0.8227  0.9939   0.8368
+Sport               0.8964  0.9585     0.9498    0.8781  0.9617   0.8964
+Toys                0.8579  0.9621     0.9359    0.8423  0.9828   0.8579
+```
+⇒ 本脚本与 stage_probe **逐位一致**，重复维护两个测同一件事的脚本只会让口径漂移。
+**保留本文件仅为历史可追溯**（2026-09-27 之前的所有结论引用它），**不要再运行、不要再改**。
+
+⚠ 并且本文件正是 2026-09-27 那个**文件维度 bug 的源头** —— 其 `FUSED` 表曾把 TA-SID 映射到
+`fused_item_emb.parquet`（在 Sport/Toys 上是 **4224d**，只有 Beauty 上恰为 896d），
+导致 TA-SID 的 A 空间 AUC 被记成 0.7835 / 0.8070（正确值 0.9617 / 0.9828）。
+该映射已于同日修正，但**修好一个已被取代的脚本没有意义** —— 真理源在 stage_probe。
+
+================================================================================
+（以下为原始 docstring，保留不改）
+
 beauty_preflight_probe.py — Beauty 补齐变体的 **零训练 pre-flight** 诊断
 
 背景：Beauty 只有 Content-only / TA-SID 两个变体，缺 Raw-CoOcc / ItemCF /
@@ -65,13 +93,20 @@ from sid_per_layer_diagnostic import normalize_rows  # noqa: E402
 # ---------------------------------------------------------------- 变体 → 量化前输入
 # Content-only 用 zeropad 文件（补零不改余弦）；ZeroPad 同名同文件 → 二者必然同值。
 # 这本身是结论的一部分：量化前 Content-only ≡ ZeroPad。
+# ⚠ 2026-09-27 订正（维度 bug）：TA-SID 原映射到 `fused_item_emb.parquet`，该文件在
+# **Sport / Toys 上是 4224d**（4096d content ⊕ 128d 行为），只有 Beauty 上恰为 896d。
+# 给 TA-SID 喂错维度的文件，使它在 A 空间被系统性判为末位，进而得出
+# 「量化前指标无预测力、ρ(A,B)=+0.058、排序由 encoder 建立」的**错误结论**（见
+# doc/beauty_preflight_probe_conclusion.md 顶部 2026-09-27 订正块，权威记录 note15 §10）。
+# 正确的行为轴融合文件是 `fused_item_emb_768d.parquet`（768 content ⊕ 128 行为 = 896d，
+# 与其余 5 个变体同维），且已核验它才是 TA-SID 各 ckpt 的真实 `args.data_path`。
 FUSED = [
     ("Content-only", "fused_item_emb_zeropad.parquet"),
     ("ZeroPad",      "fused_item_emb_zeropad.parquet"),
     ("Shuffled",     "fused_item_emb_shuffled.parquet"),
     ("ItemCF",       "fused_item_emb_itemcf.parquet"),
     ("Raw-CoOcc",    "fused_item_emb_rawcooc.parquet"),
-    ("TA-SID",       "fused_item_emb.parquet"),
+    ("TA-SID",       "fused_item_emb_768d.parquet"),   # ← 订正：原为 fused_item_emb.parquet
 ]
 
 # 期望排序（来自 Sport/Toys 的 xq[full] 实测）
@@ -90,7 +125,14 @@ def load_fused(path, n_items):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Beauty 补齐变体 pre-flight（量化前）诊断")
+    print("=" * 96)
+    print("⚠️ 本脚本已于 2026-09-27 退役。产出是 `tools/stage_probe.py` 的真子集，且曾是")
+    print("   文件维度 bug 的源头。请改用：")
+    print("       python3 tools/stage_probe.py            # A/B/C 三空间 × 6 变体 × 3 数据集")
+    print("       python3 tools/stage_probe.py --audit_a  # TA-SID legacy 4224d vs 896d 对照")
+    print("   本次运行仅为历史可追溯；**不要把它的输出当作结论**。")
+    print("=" * 96)
+    ap = argparse.ArgumentParser(description="[已退役] Beauty 补齐变体 pre-flight（量化前）诊断")
     ap.add_argument("--dataset", type=str, default="Beauty")
     ap.add_argument("--data_dir", type=str, default=DATA_DIR)
     ap.add_argument("--window_size", type=int, default=3)

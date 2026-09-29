@@ -94,6 +94,8 @@
 ### ③ 内容 vs 行为 embedding 正交性分析（~0.5h，重要性：高）
 利用已有 embedding 数据（item_emb.parquet + behavior_emb.parquet），证明 transition 信号编码了内容之外的独立信息。
 
+> ⚠ **2026-09-29 作废：该分析已从论文中整节删除，不要计入完成度。** 原因：结果未落盘、不可溯源；指标名 "Jaccard" 实为 `overlap/k`；数字基于已弃用的 4096d 内容嵌入；且"低相关 ⟹ 互补"的逻辑不成立。非冗余性改由 §7.2 四臂消融背书。详见 `paper_outline_ta_sid.md` §7.5 裁撤说明。
+
 ### ④ Invalid ID Rate（~0.5h，重要性：低）
 ✅ 已完成（三数据集 ≈ 0%），仅用于质量报告。
 

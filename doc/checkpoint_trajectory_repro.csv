@@ -1,0 +1,13 @@
+tag,epoch,epoch_idx,legacy_ckpt,bit_identical,max_abs_diff
+Beauty_TA_SID,50,49,rqvae/ckpt/Beauty_TA_SID/Jul-15-2026_23-07-40/best_loss_model.pth,True,0.000000
+Beauty_TA_SID_seed2025,50,49,rqvae/ckpt/Beauty_TA_SID_seed2025/Sep-04-2026_16-30-46/best_loss_model.pth,True,0.000000
+Beauty_TA_SID_seed2026,50,49,rqvae/ckpt/Beauty_TA_SID_seed2026/Sep-04-2026_16-38-44/best_loss_model.pth,True,0.000000
+Sport_TA_SID_768d,50,49,rqvae/ckpt/Sport_TA_SID_768d/Jul-28-2026_22-58-36/best_loss_model.pth,True,0.000000
+Sport_TA_SID_seed2025,50,49,rqvae/ckpt/Sport_TA_SID_seed2025/Sep-04-2026_16-46-49/best_loss_model.pth,True,0.000000
+Sport_TA_SID_seed2026,50,49,rqvae/ckpt/Sport_TA_SID_seed2026/Sep-04-2026_16-56-54/best_loss_model.pth,True,0.000000
+Toys_TA_SID_768d,50,49,rqvae/ckpt/Toys_TA_SID_768d/Jul-28-2026_23-22-02/best_loss_model.pth,True,0.000000
+Toys_TA_SID_768d,50,49,rqvae/ckpt/Toys_TA_SID_768d/Jul-28-2026_23-32-18/best_loss_model.pth,True,0.000000
+Toys_TA_SID_seed2025,50,49,rqvae/ckpt/Toys_TA_SID_seed2025/Sep-03-2026_22-07-02/best_loss_model.pth,True,0.000000
+Toys_TA_SID_seed2026,50,49,rqvae/ckpt/Toys_TA_SID_seed2026/Sep-03-2026_22-14-27/best_loss_model.pth,True,0.000000
+Toys_TA_SID_seed2026,1000,999,rqvae/ckpt/Toys_TA_SID_seed2026/Sep-03-2026_22-14-27/best_collision_model.pth,True,0.000000
+Toys_TA_SID_seed2026,1000,999,rqvae/ckpt/Toys_TA_SID_seed2026/Sep-03-2026_22-14-27/epoch_999_collision_0.0118_model.pth,True,0.000000

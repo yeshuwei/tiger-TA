@@ -1,0 +1,11 @@
+# GRU4Rec Beauty — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.023796	0.028091	0.031908	0.032643	0.045924	0.061128	(best epoch 60)
+2026	0.023344	0.027526	0.031183	0.032107	0.045119	0.059607	(best epoch 100)
+2027	0.025972	0.029619	0.033778	0.035147	0.046505	0.063006	(best epoch 60)
+
+mean	0.024371	0.028412	0.032290	0.033299	0.045849	0.061247
+std	0.001147	0.000884	0.001093	0.001325	0.000568	0.001390

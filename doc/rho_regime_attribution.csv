@@ -1,0 +1,49 @@
+part,auc_degsimilar_baseline,auc_degsum_baseline,dataset,deg_median_gap,deg_median_neg,deg_median_pos,n_neg,n_pos,neg_regime,pos_regime,regime,rho,rqvae_seed,space_pair
+rho,,,Sport,,,,,,,,topk × degmatch  ★主口径,0.9276336570439174,2024,A-B
+rho,,,Sport,,,,,,,,topk × degmatch  ★主口径,0.9276336570439174,2024,A-C
+rho,,,Sport,,,,,,,,topk × degmatch  ★主口径,1.0,2024,B-C
+rho,,,Sport,,,,,,,,topk × uniform,0.9276336570439174,2024,A-B
+rho,,,Sport,,,,,,,,topk × uniform,0.9276336570439174,2024,A-C
+rho,,,Sport,,,,,,,,topk × uniform,0.942857142857143,2024,B-C
+rho,,,Sport,,,,,,,,all  × degmatch,0.9856107606091624,2024,A-B
+rho,,,Sport,,,,,,,,all  × degmatch,0.9276336570439174,2024,A-C
+rho,,,Sport,,,,,,,,all  × degmatch,0.942857142857143,2024,B-C
+rho,,,Sport,,,,,,,,all  × uniform,0.6377481392176932,2024,A-B
+rho,,,Sport,,,,,,,,all  × uniform,0.6377481392176932,2024,A-C
+rho,,,Sport,,,,,,,,all  × uniform,1.0,2024,B-C
+rho,,,Toys,,,,,,,,topk × degmatch  ★主口径,0.9276336570439174,2024,A-B
+rho,,,Toys,,,,,,,,topk × degmatch  ★主口径,0.9276336570439174,2024,A-C
+rho,,,Toys,,,,,,,,topk × degmatch  ★主口径,1.0,2024,B-C
+rho,,,Toys,,,,,,,,topk × uniform,0.9276336570439174,2024,A-B
+rho,,,Toys,,,,,,,,topk × uniform,0.9276336570439174,2024,A-C
+rho,,,Toys,,,,,,,,topk × uniform,1.0,2024,B-C
+rho,,,Toys,,,,,,,,all  × degmatch,0.9856107606091624,2024,A-B
+rho,,,Toys,,,,,,,,all  × degmatch,0.9276336570439174,2024,A-C
+rho,,,Toys,,,,,,,,all  × degmatch,0.942857142857143,2024,B-C
+rho,,,Toys,,,,,,,,all  × uniform,0.8116794499134278,2024,A-B
+rho,,,Toys,,,,,,,,all  × uniform,0.8116794499134278,2024,A-C
+rho,,,Toys,,,,,,,,all  × uniform,1.0,2024,B-C
+rho,,,Beauty,,,,,,,,topk × degmatch  ★主口径,0.9856107606091624,2024,A-B
+rho,,,Beauty,,,,,,,,topk × degmatch  ★主口径,0.9856107606091624,2024,A-C
+rho,,,Beauty,,,,,,,,topk × degmatch  ★主口径,1.0,2024,B-C
+rho,,,Beauty,,,,,,,,topk × uniform,0.6377481392176932,2024,A-B
+rho,,,Beauty,,,,,,,,topk × uniform,0.6377481392176932,2024,A-C
+rho,,,Beauty,,,,,,,,topk × uniform,1.0,2024,B-C
+rho,,,Beauty,,,,,,,,all  × degmatch,0.9276336570439174,2024,A-B
+rho,,,Beauty,,,,,,,,all  × degmatch,0.9276336570439174,2024,A-C
+rho,,,Beauty,,,,,,,,all  × degmatch,1.0,2024,B-C
+rho,,,Beauty,,,,,,,,all  × uniform,0.6377481392176932,2024,A-B
+rho,,,Beauty,,,,,,,,all  × uniform,0.6377481392176932,2024,A-C
+rho,,,Beauty,,,,,,,,all  × uniform,1.0,2024,B-C
+degree_baseline,0.5054176489251048,0.5270887466315397,Sport,11.0,94.0,105.0,998,998,degmatch,topk,,,,
+degree_baseline,0.49614057774868375,0.9406568648318682,Sport,94.0,11.0,105.0,998,998,uniform,topk,,,,
+degree_baseline,0.4995121437155912,0.5131835295699981,Sport,0.0,30.0,30.0,19999,19999,degmatch,all,,,,
+degree_baseline,0.39373992800845103,0.82485150308818,Sport,19.0,11.0,30.0,19999,19999,uniform,all,,,,
+degree_baseline,0.555883,0.5286675,Toys,5.0,44.0,49.0,1000,1000,degmatch,topk,,,,
+degree_baseline,0.6317765,0.899531,Toys,39.0,10.0,49.0,1000,1000,uniform,topk,,,,
+degree_baseline,0.50916386875,0.5146776000000001,Toys,2.0,23.0,25.0,20000,20000,degmatch,all,,,,
+degree_baseline,0.47201537125000004,0.78646998125,Toys,14.0,11.0,25.0,20000,20000,uniform,all,,,,
+degree_baseline,0.536297,0.5269615,Beauty,3.0,69.0,72.0,1000,1000,degmatch,topk,,,,
+degree_baseline,0.696341,0.9406944999999999,Beauty,61.0,11.0,72.0,1000,1000,uniform,topk,,,,
+degree_baseline,0.50416980875,0.5143353125,Beauty,1.0,27.0,28.0,20000,20000,degmatch,all,,,,
+degree_baseline,0.45057746249999997,0.81080551875,Beauty,17.0,11.0,28.0,20000,20000,uniform,all,,,,

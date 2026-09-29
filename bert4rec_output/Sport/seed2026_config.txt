@@ -1,0 +1,2 @@
+# git HEAD: 9bcac4a6b8a50d4c42d140addb8865a77f7f5ec1
+# argv: tools/run_bert4rec.py --dataset Sport --seeds 2026 --output_dir bert4rec_output

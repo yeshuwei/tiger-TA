@@ -65,9 +65,9 @@
 
 | Method | Sport N@20 | Sport R@20 | Beauty N@20 | Beauty R@20 | Toys N@20 | Toys R@20 |
 |:-------|:---------:|:---------:|:-----------:|:-----------:|:---------:|:---------:|
-| SASRec | 0.0134±0.0002 | 0.0374±0.0014 | 0.0254±0.0007 | 0.0711±0.0016 | 0.0241±0.0003 | 0.0651±0.0015 |
-| **Content-only (TIGER 复刻, 768d)** | 0.0275±0.0006 | 0.0666±0.0015 | 0.0358±0.0007 | 0.0811±0.0008 | 0.0336±0.0006 | 0.0785±0.0007 |
-| **TA-SID (768d)** | **0.0322±0.0004** | **0.0769±0.0011** | **0.0415±0.0009** | **0.0941±0.0016** | **0.0377±0.0007** | **0.0911±0.0020** |
+| SASRec | 0.0134±0.0003 | 0.0374±0.0017 | 0.0254±0.0009 | 0.0711±0.0019 | 0.0241±0.0004 | 0.0651±0.0019 |
+| **Content-only (TIGER 复刻, 768d)** | 0.0275±0.0007 | 0.0666±0.0019 | 0.0358±0.0009 | 0.0811±0.0010 | 0.0336±0.0007 | 0.0785±0.0009 |
+| **TA-SID (768d)** | **0.0322±0.0005** | **0.0769±0.0014** | **0.0415±0.0011** | **0.0941±0.0019** | **0.0377±0.0007** | **0.0911±0.0020** |
 | *TA-SID vs Content-only* | *+17.1%* | *+15.5%* | *+15.9%* | *+16.0%* | *+12.2%* | *+16.1%* |
 | *TA-SID vs SASRec* | *+139.5%* | *+105.5%* | *+63.2%* | *+32.3%* | *+56.4%* | *+39.9%* |
 
@@ -80,16 +80,18 @@
 > **R@20 勘误（2026-08-03）：** Beauty TA-SID R@20 原记录 0.0933±0.0014 与 eval log 不符。实测 3 seed R@20 = 0.0951 / 0.0953 / 0.0919（`model/logs/Beauty_ta_sid_768d_seed202{5,6,7}_eval.log`），均值±std = **0.0941±0.0016**。本表已改为实测值，连带 vs Content-only +16.0%（旧 SASRec 口径下 vs SASRec +4.4%，2026-08-07 对齐后为 +32.3%）。
 >
 > **SASRec v2 重跑（2026-08-07）：** 旧 SASRec 数字存在 off-by-one（"test" 实为 valid 任务：从 train.h+target 预测 valid.target），且只评估 10,000 用户子集、单 seed。v2 已修正：test = 从 test.parquet 预测（与 TA-SID 最终测试集严格一致）+ 全量用户 + 3-seed（2025/2026/2027）。对齐后 SASRec 整体下移（N@20 降 ~16-21%），TA-SID vs SASRec 优势扩大。完整方法见 [sasrec_baseline_report.md v2](sasrec_baseline_report.md)，数据源 `sasrec_output/{Dataset}/summary_3seed.txt`。
+>
+> **std 口径统一（2026-09-29）：** 上面两表的 std 原为 ddof=0（`np.std` 默认 = 总体标准差），与 [ablation_main_table_3datasets.md](ablation_main_table_3datasets.md)、图 A 的 ddof=1 冲突（18/18 格四位小数即不同）。**已统一为 ddof=1（样本标准差 / Bessel 校正）**。均值与逐 seed 值全部未变，仅 std 改变。对账表见 [seq_baselines_significance.md §1](seq_baselines_significance.md)；成因见 [paper_main_results.md §5](paper_main_results.md)。
 
 **3 seed 明细（NDCG@20）：**
 
 | 数据集 | 方法 | seed2025 | seed2026 | seed2027 | 均值±std |
 |:--|:--|:--:|:--:|:--:|:--:|
-| Sport | Content-only | 0.0274 | 0.0283 | 0.0269 | 0.0275±0.0006 |
-| Sport | TA-SID | 0.0327 | 0.0317 | 0.0322 | **0.0322±0.0004** |
-| Beauty | Content-only | 0.0368 | 0.0352 | 0.0354 | 0.0358±0.0007 |
-| Beauty | TA-SID | 0.0418 | 0.0425 | 0.0403 | **0.0415±0.0009** |
-| Toys | Content-only | 0.0341 | 0.0338 | 0.0328 | 0.0336±0.0006 |
+| Sport | Content-only | 0.0274 | 0.0283 | 0.0269 | 0.0275±0.0007 |
+| Sport | TA-SID | 0.0327 | 0.0317 | 0.0322 | **0.0322±0.0005** |
+| Beauty | Content-only | 0.0368 | 0.0352 | 0.0354 | 0.0358±0.0009 |
+| Beauty | TA-SID | 0.0418 | 0.0425 | 0.0403 | **0.0415±0.0011** |
+| Toys | Content-only | 0.0341 | 0.0338 | 0.0328 | 0.0336±0.0007 |
 | Toys | TA-SID | 0.0369 | 0.0383 | 0.0380 | **0.0377±0.0007** |
 
 **关键结论：**
@@ -364,32 +366,44 @@ Track B 的负面结果**不影响论文的核心贡献**：
 
 ---
 
-### 5.3 转移一致性对比：TA-SID vs Content-only baseline（2026-08-01）
+### 5.3 转移一致性对比：TA-SID vs Content-only baseline（主口径已于 2026-09-29 统一为**度匹配负采样**）
+
+> ⚠ **口径变更（2026-09-29）**：本节原为 **uniform 随机负采样**口径（Beauty 0.869 / Sport 0.962 / Toys 0.872），
+> **已废弃，勿引用**。主口径统一为下表**度匹配负采样**，与 [behavior_structure_probe_conclusion.md](behavior_structure_probe_conclusion.md)
+> 及 [beauty_tier2_three_dataset_table.csv](beauty_tier2_three_dataset_table.csv) 完全一致。两套数值不可并列比较。
 
 **目的：** 回答"转移关系是否被编码进 SID"，并补充 TIGER 对照（此前只有 TA-SID 无基线对照）。
 
-**指标定义（AUC 为主指标）：** 在**量化输出空间**（用 SID code 重建 x_q = Σ_l codebook_l[code[:,l]]）比较高频转移对（正样本）与随机商品对（负样本）的余弦相似度。
-- **AUC** = P(转移对相似度 > 随机对相似度)。0.5=随机（转移未编码），1=完美。等价于 Link Prediction 的 AUC（Mann-Whitney U），是图嵌入/推荐的标准评估。
-- **为什么不能用绝对 cos**：绝对 cos 混入了"整体聚集度"（content-only 的量化空间把所有商品挤在一起，随机对 cos 高达 0.65，绝对 cos 虚高）；AUC 只关心转移对相对普通对**是否更相似**，剥离了聚集度干扰（对应对比学习 alignment-uniformity 框架，Wang & Isola 2020）。
+**指标定义（AUC 为主指标）：** 在**量化输出空间**（用 SID code 重建 $x_q^{[\mathrm{full}]}$ = Σ_l codebook_l[code[:,l]]）比较高频转移对（正样本）与**度匹配非边对**（负样本）的余弦相似度。
+- **正样本**：频次最高的 1000 条转移边（count ≥ 6，与 TA-SID 转移图同源）。
+- **负样本**：与正样本端点同处一个 $\lfloor\log_2 \deg\rfloor$ 度分桶的非边对 20,000 条，剔除自环与转移图内已有边。**采用度匹配负采样以降低节点流行度差异带来的结构预测偏差**（均匀采样下负样本端点平均度数仅为正样本约 1/9，分类器可凭"热门商品彼此都相似"取得虚高分数）。
+- **AUC** = P(转移对相似度 > 非边对相似度)。0.5=随机（转移未编码），1=完美。等价于 Link Prediction 的 AUC（Mann-Whitney U），是图嵌入/推荐的标准评估。
+- **为什么不能用绝对 cos**：绝对 cos 混入了"整体聚集度"——content-only 的量化空间把所有商品挤在一起，转移对与普通对的绝对余弦**同时**虚高；AUC 只关心转移对相对普通对**是否更相似**，剥离了聚集度干扰（对应对比学习 alignment-uniformity 框架，Wang & Isola 2020）。
 
-**结果（AUC 主指标 + 均值差辅助）：**
+**结果（AUC 主指标；`xq[full]` × `topk` 正样本 × `degmatch` 负样本）：**
 
-| 数据集 | 方法 | 转移对 cos | 随机对 cos | **AUC** | 均值差 |
-|:--|:--|:--:|:--:|:--:|:--:|
-| Beauty | TA-SID | 0.759 | 0.389 | **0.869** | 0.367 |
-| Beauty | Content-only | 0.788 | 0.652 | 0.753 | 0.132 |
-| Sport | TA-SID | 0.824 | 0.347 | **0.962** | 0.482 |
-| Sport | Content-only | 0.794 | 0.478 | 0.900 | 0.323 |
-| Toys | TA-SID | 0.739 | 0.345 | **0.872** | 0.396 |
-| Toys | Content-only | 0.799 | 0.558 | 0.863 | 0.241 |
+| 数据集 | 方法 | **AUC** | ΔAUC vs Content-only |
+|:--|:--|:--:|:--:|
+| Beauty | **TA-SID** | **0.9560** | **+0.1195** |
+| Beauty | Content-only | 0.8365 | — |
+| Beauty | Shuffled（错配行为下界） | 0.7974 | −0.0391 |
+| Sport | **TA-SID** | **0.9647** | **+0.0568** |
+| Sport | Content-only | 0.9080 | — |
+| Sport | Shuffled（错配行为下界） | 0.8763 | −0.0317 |
+| Toys | **TA-SID** | **0.9651** | **+0.0900** |
+| Toys | Content-only | 0.8751 | — |
+| Toys | Shuffled（错配行为下界） | 0.8127 | −0.0624 |
 
 **关键解读：**
-1. **TA-SID 的 AUC 三个数据集全部占优**（ΔAUC: Beauty +0.115, Sport +0.062, Toys +0.009）→ 在 SID 量化空间，TA-SID 更可靠地把转移对从普通对中区分出来
-2. **绝对 cos 会误导**：content-only 绝对 cos 反而更高，是因为码本把商品挤在一起（随机对 0.65）导致虚高；TA-SID 把商品区分开（随机对 0.35）的同时转移对保持 0.74-0.82 → 转移关系被真正凸显
-3. **Toys 优势最小（ΔAUC +0.009）**：与主实验 Toys 提升相对最小（NDCG@20 +12.2%，2026-09-09 provenance 修复口径）一致——Toys 数据上各方法趋于饱和，转移信号的边际贡献小。论文应诚实报告并给出这个解释
-4. 指标可靠性：均值差/中位数差/AUC 三种变体结论方向完全一致（稳健）
+1. **TA-SID 的 AUC 三个数据集全部占优，且恒为全变体最高**（ΔAUC: Beauty +0.1195, Sport +0.0568, Toys +0.0900）→ 在 SID 量化空间，TA-SID 更可靠地把转移对从非边对中区分出来
+2. **两端稳健、中间分层**：TA-SID 恒居首、Shuffled（错配行为）恒居末且**低于"完全不给行为"的 Content-only**；中间变体（ItemCF / Raw-CoOcc / ZeroPad）的具体名次跨数据集并不完全一致 → 对外只主张"**两端 + 分层**"，**不主张逐名次同序**
+3. ⚠ **诚实说明（量级不对应）**：ΔAUC 的绝对量级与主实验 NDCG@20 提升幅度**不对应**（按 ΔAUC 为 Beauty > Toys > Sport，按 NDCG 为 Sport > Beauty > Toys）。跨数据集可迁移的是"分层与两端"，不是具体名次或量级；本指标**不作跨数据集绝对阈值**。**旧版"Toys ΔAUC 最小故提升最小"的表述已作废**
+4. 指标可靠性：两种负采样口径（uniform / degmatch）给出的变体**排序完全一致**（Spearman ρ 同为 0.9429）→ 结论不由负采样捷径支撑
 
-**复现：** `python3 tools/sid_consistency_contrast.py`
+**完整矩阵（6 变体 × 3 数据集）：** [beauty_tier2_three_dataset_table.csv](beauty_tier2_three_dataset_table.csv)（AUC × NDCG@20）；[behavior_structure_probe_conclusion.md](behavior_structure_probe_conclusion.md)（另含 `xq[L0]`/`z` 空间、Hamming/L0-match 离散指标、2×2 负采样 × 正样本网格）
+
+**复现：** `python3 tools/behavior_structure_probe.py --datasets Sport,Toys,Beauty --spaces "xq[full],xq[L0],z"`（CPU 分钟级）
+（旧口径由 `tools/sid_consistency_contrast.py` 生成，**已不作为主结果**）
 
 ---
 

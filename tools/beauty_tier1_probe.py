@@ -6,6 +6,10 @@ beauty_tier1_probe.py — Beauty Tier-1：RQ-VAE encoder + 量化 的行为结�
     只测 **z（32d，encoder 输出）** 与 **xq[full]（32d，码本重建）** 两个空间。
     **禁止**用 fused 896d 作判断依据（已在 doc/beauty_preflight_probe_conclusion.md
     §2 证明其与真实排序 ρ=+0.058、且把 TA-SID 判为末位 → 无预测力）。
+    ⚠ 2026-09-27 订正：该"无预测力"结论**已作废** —— +0.058 是文件维度 bug（Sport/Toys 的
+    TA-SID 被喂了 4224d 文件）。修正后 ρ(A输入, C最终) = 0.928 / 0.928 / 0.986，896d 是**有效**
+    的判断空间。本脚本**仍只测 z 与 xq[full]**（保持与既有记录可比，且各自结论已独立成立），
+    但"禁止用 896d"这一理由不再是"它无预测力"。见 note15 §10。
     **不跑 T5、不算 NDCG**（那属 Tier-2）。
 
 所有可复用逻辑**逐位复用** tools/behavior_structure_probe.py：

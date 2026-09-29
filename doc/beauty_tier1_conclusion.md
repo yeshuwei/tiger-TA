@@ -9,6 +9,8 @@
 > 口径与 `tools/behavior_structure_probe.py` **逐位一致**（E 图 window=3 / degmatch 负样本 / cosine AUC），
 > **未重新定义 Behavior AUC**。判断只用 **z** 与 **xq[full]**；fused 896d 已在
 > [beauty_preflight_probe_conclusion.md](beauty_preflight_probe_conclusion.md) §2 证明无预测力，**不作判断依据**。
+> ⚠️ **2026-09-27 订正：末句作废** —— 该"无预测力"是文件维度 bug（见上文 §0 订正块），896d 在修正后是**有效**的判断空间。
+> 本文件**继续只测 z / xq[full]** 的理由改为"保持与既有记录可比 + 各自结论已独立成立"，不再是"896d 无效"。
 
 ---
 
@@ -21,6 +23,13 @@
 > **未出现非相邻的大幅乱序** —— 按判据的实质意图（现象是否跨数据集成立）应当判为**通过**。
 > 另有一个**超出预期的观察**：Beauty 是**唯一一个「量化前排序就已经正确」的数据集**
 > （ρ(A输入, C最终) = **+0.986**，而 Sport/Toys 均为 **+0.058**）。
+
+> ⚠️⚠️ **2026-09-27 订正：以上第二段（"超出预期的观察"）作废。**
+> Sport/Toys 的 **+0.058 是文件维度 bug**（`fused_item_emb.parquet` 在二者上是 **4224d**，Beauty 上恰为 896d），不是发现。
+> 修正后 ρ(A输入, C最终) = **+0.928 / +0.928 / +0.986**（Sport/Toys/Beauty）——
+> **Beauty 不是唯一，"量化前排序已经正确"是三个数据集的共同性质。**
+> ⇒ 本节 §0 第一段的裁决（"判据基本通过"）**不受影响**（其依据是 xq[full]）；受影响的只有这第二段。
+> 权威记录：`notes/15_g2_stage_seed_robustness_plan.md` §10。
 
 ---
 
@@ -80,6 +89,17 @@ uniform 18.5，Δ=−66.5），**主口径确实控制住了 popularity**。
 | ρ(A 输入 896d, B z) —— encoder 是否重排 | **+0.986** | +0.058 | +0.058 |
 | ρ(A 输入 896d, C xq[full]) | **+0.986** | +0.058 | +0.058 |
 
+> ⚠️ **2026-09-27 订正后的同一张表**（Sport/Toys 的 A 列改用正确的 896d 文件 `fused_item_emb_768d.parquet`；B/C 值不变）：
+>
+> | ρ | Beauty | Sport | Toys |
+> |:--|:--:|:--:|:--:|
+> | ρ(B z, C xq[full]) —— 量化是否保序 | +1.000 | +1.000 | +1.000 |
+> | ρ(A 输入 896d, B z) —— encoder 是否重排 | +0.986 | **+0.928** | **+0.928** |
+> | ρ(A 输入 896d, C xq[full]) | +0.986 | **+0.928** | **+0.928** |
+>
+> ⇒ **"encoder 是否重排"这一问的回答在三数据集上一致为"基本不重排"**（0.928–0.986）。
+> ⚠️ 主口径（topk × degmatch）；四口径组合区间 **0.638–0.986**，**口径敏感性 >> 种子敏感性（=0）**。
+
 **两点读数**：
 
 1. **`z → xq` 保序在第三个数据集上再次成立（3/3，ρ=1.000）**。
@@ -88,6 +108,8 @@ uniform 18.5，Δ=−66.5），**主口径确实控制住了 popularity**。
    数值差 |z−xq| ≤ 0.0134（多数 ≤0.007），量级与既有 12 格网格一致。
 
 2. **★ Beauty 是「输入已经对了」的数据集，与 Sport/Toys 截然不同 ★**
+   ⚠️ **2026-09-27 订正：本读数（下方 L91–L106）整体作废 —— 「与 Sport/Toys 截然不同」不成立，三数据集一致。**
+   订正块见本读数末。**请勿引用本读数内的 0.058 / 0.7835 / 0.8070，以及"encoder 建立排序""不能 rehabilitate 量化前筛选"两句。**
    在 Sport/Toys 上，变体排序在输入嵌入里**根本不存在**（ρ=+0.058），是 encoder 把它**建立**出来的
    —— 最锋利的一例是 TA-SID 输入 AUC **最低**（0.7835 / 0.8070）却变成**最高**。
    但在 Beauty 上，量化前的 TA-SID **本来就是第一名**（0.9939），
@@ -104,6 +126,17 @@ uniform 18.5，Δ=−66.5），**主口径确实控制住了 popularity**。
    不改变它在 Sport/Toys 上系统性反向（+0.058、把 TA-SID 判末位）的事实；
    一个在 2/3 数据集上无预测力、且反向方向固定的指标，**不能用于筛选**。
    该指标在 [beauty_preflight_probe_conclusion.md](beauty_preflight_probe_conclusion.md) §0 的废弃声明**继续有效**。
+
+   > ⚠️⚠️ **2026-09-27 订正：本读数逐句反转如下。**
+   > 根因：Sport/Toys 的 TA-SID 在 pre-flight 中被喂了 **4224d** 的 `fused_item_emb.parquet`（Beauty 上恰为 896d，故未受影响）。修正后：
+   > - L91「在 Sport/Toys 上，变体排序在输入嵌入里**根本不存在**（ρ=+0.058）」→ **不成立**，ρ(A,B) = **+0.928 / +0.928**；
+   > - L92「最锋利的一例是 TA-SID 输入 AUC **最低**（0.7835 / 0.8070）」→ TA-SID 输入 AUC **最高**（**0.9617 / 0.9828**），**没有这一例**；
+   > - L93「Beauty 上量化前的 TA-SID 本来就是第一名」→ **三数据集的 TA-SID 都本来就是第一名**（Beauty 0.9939 不变）；
+   > - L97–L101「『encoder 建立排序』是 Sport/Toys 的行为，不是普适规律」→ **没有任何数据集出现"encoder 建立排序"**，三数据集一致为**保序**；
+   > - L103–L106「这不能 rehabilitate『量化前筛选』…废弃声明继续有效」→ **反了**：量化前指标与真口径 ρ ≈ 0.93–0.99，**可以**作筛选。**§0 的废弃声明已撤，以 [beauty_preflight_probe_conclusion.md](beauty_preflight_probe_conclusion.md) §0 顶部的 2026-09-27 订正块为准。**
+   >
+   > ✅ **本节不受影响的结论**：§1 的 xq[full]/z 数值表与排序（依据与 A 空间无关）；§2 的判据裁决 13/15（同上）；§3 读数 1「z → xq 保序」（ρ(B,C)=1.000，与 A 无关）；§4 的 NDCG 锚点对照。
+   > ⚠️ 附带：本文件范围声明（L10–L11）中"fused 896d … 证明无预测力，**不作判断依据**"一句同样作废 —— 896d 在修正后是**有效**的判断空间。
 
 ## 4. 与已有 NDCG 锚点的一致性（只做对照，不新增结论）
 
@@ -152,7 +185,7 @@ Beauty 的 ρ(AUC, NDCG) 需要 Tier-2 补齐另外 4 个变体的 NDCG 才能�
 
 ## 相关
 
-[beauty_preflight_probe_conclusion.md](beauty_preflight_probe_conclusion.md)（pre-flight 废弃 + 三级分解原始版）|
+[beauty_preflight_probe_conclusion.md](beauty_preflight_probe_conclusion.md)（三级分解原始版；⚠️ 其 §0/§2/§3读数2/§4 的"pre-flight 废弃"与 +0.058 **已于 2026-09-27 订正作废**，以该文件顶部订正块为准）|
 [behavior_structure_probe_conclusion.md](behavior_structure_probe_conclusion.md)（主结论）|
 [e49grid_diag_summary.md](e49grid_diag_summary.md)（量化端 12 格网格）|
 [e49_ablation_full_conclusion.md](e49_ablation_full_conclusion.md)（消融总汇总）

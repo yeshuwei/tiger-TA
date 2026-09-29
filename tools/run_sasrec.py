@@ -17,6 +17,12 @@ SASRec 基线实验 v2 — 对齐 TA-SID 评估协议（修正 off-by-one）
 TA-SID T5 最终评估 = test（从 [i_1..i_{L-1}] 预测 i_L）。
 SASRec v1 的 "test" 实际是 valid 任务（从 [i_1..i_{L-2}] 预测 i_{L-1}），已修正。
 
+【2026-09-29 重构说明】数据加载 / 评估 / 训练骨架已抽到
+tools/seq_baselines_common.py，与 GRU4Rec / BERT4Rec 基线共用，保证三方法
+数据切分与评估口径严格一致。本文件的网络（含因果 mask）、采样器（WarpSampler）、
+损失（BCE）+ 优化器（betas=(0.9,0.98)）仍是 SASRec 专属，**语义零改动**。
+重构后必须通过与 sasrec_output/ 的逐位 diff 门禁（见 seq_baselines_common 顶部说明）。
+
 用法：
     cd /data/gtx/project/code/TIGER_minilm
     conda activate tiger_t5
@@ -35,88 +41,29 @@ SASRec v1 的 "test" 实际是 valid 任务（从 [i_1..i_{L-2}] 预测 i_{L-1}�
 
 import os
 import sys
-import time
-import math
-import random
 import argparse
-from collections import defaultdict
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from seq_baselines_common import (  # noqa: E402
+    PointWiseFeedForward,
+    add_common_args,
+    evaluate_full,          # noqa: F401  (re-export 供外部脚本 import)
+    resolve_device,
+    run_datasets,
+    run_seed,
+    seed_everything,
+    xavier_init_zeros,
+)
 
-# ============================================================
-# 1. 数据加载与适配
-# ============================================================
-
-def load_tiger_data(data_dir: str):
-    """加载 TIGER 格式的 parquet 数据，重建 SASRec 格式。
-
-    返回三个字典（user → list）：
-      train   : train.parquet 的 history（SASRec 训练采样用）
-      valid   : valid.parquet 的 target（T5 验证任务的目标）
-      val_seq : valid.parquet 的 history（T5 验证任务的输入）
-      test    : test.parquet 的 target（T5 测试任务的目标）
-      test_seq: test.parquet 的 history（T5 测试任务的输入）
-    """
-    train = pd.read_parquet(os.path.join(data_dir, "train.parquet"))
-    valid = pd.read_parquet(os.path.join(data_dir, "valid.parquet"))
-    test = pd.read_parquet(os.path.join(data_dir, "test.parquet"))
-
-    user_train = {}
-    user_valid = {}
-    user_val_seq = {}
-    user_test = {}
-    user_test_seq = {}
-
-    itemnum = 0
-
-    for _, row in train.iterrows():
-        uid = int(row["user"])
-        history = row["history"].tolist() if isinstance(row["history"], np.ndarray) else list(row["history"])
-        target = int(row["target"])
-        user_train[uid] = [int(x) for x in history]
-        itemnum = max(itemnum, max(user_train[uid]) if user_train[uid] else 0, target)
-
-    for _, row in valid.iterrows():
-        uid = int(row["user"])
-        history = row["history"].tolist() if isinstance(row["history"], np.ndarray) else list(row["history"])
-        target = int(row["target"])
-        user_val_seq[uid] = [int(x) for x in history]
-        user_valid[uid] = [int(target)]
-        itemnum = max(itemnum, target)
-
-    for _, row in test.iterrows():
-        uid = int(row["user"])
-        history = row["history"].tolist() if isinstance(row["history"], np.ndarray) else list(row["history"])
-        target = int(row["target"])
-        user_test_seq[uid] = [int(x) for x in history]
-        user_test[uid] = [int(target)]
-        itemnum = max(itemnum, target)
-
-    # 过滤：三个 split 都存在，且 val/test 序列非空
-    common = set(user_train) & set(user_val_seq) & set(user_test_seq)
-    common = {u for u in common
-              if len(user_val_seq[u]) >= 1 and len(user_test_seq[u]) >= 1}
-
-    filtered_train = {u: user_train[u] for u in common}
-    filtered_val = {u: user_valid[u] for u in common}
-    filtered_val_seq = {u: user_val_seq[u] for u in common}
-    filtered_test = {u: user_test[u] for u in common}
-    filtered_test_seq = {u: user_test_seq[u] for u in common}
-
-    print(f"  Users: {len(filtered_train)} (filtered from {len(user_train)})")
-    print(f"  Items: {itemnum}")
-    print(f"  Avg train seq len: {np.mean([len(v) for v in filtered_train.values()]):.2f}")
-
-    return (filtered_train, filtered_val, filtered_val_seq,
-            filtered_test, filtered_test_seq, itemnum)
+METHOD_NAME = "SASRec"
 
 
 # ============================================================
-# 2. SASRec 采样器（从 pmixer/SASRec.pytorch 移植）
+# 1. SASRec 采样器（从 pmixer/SASRec.pytorch 移植）
 # ============================================================
 
 def random_neq(l, r, s):
@@ -188,24 +135,8 @@ class WarpSampler:
 
 
 # ============================================================
-# 3. SASRec 模型（从 pmixer/SASRec.pytorch 移植）
+# 2. SASRec 模型（从 pmixer/SASRec.pytorch 移植）
 # ============================================================
-
-class PointWiseFeedForward(nn.Module):
-    def __init__(self, hidden_units, dropout_rate):
-        super().__init__()
-        self.conv1 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
-        self.dropout1 = nn.Dropout(p=dropout_rate)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
-        self.dropout2 = nn.Dropout(p=dropout_rate)
-
-    def forward(self, inputs):
-        outputs = self.dropout2(
-            self.conv2(self.relu(self.dropout1(self.conv1(inputs.transpose(-1, -2)))))
-        )
-        return outputs.transpose(-1, -2)
-
 
 class SASRec(nn.Module):
     def __init__(self, user_num, item_num, args):
@@ -262,7 +193,7 @@ class SASRec(nn.Module):
         return pos_logits, neg_logits
 
     def predict(self, user_ids, log_seqs, item_indices):
-        """返回 logits，形状 (len(item_indices), B)"""
+        """返回 logits，形状 (B, len(item_indices))（matmul 广播）"""
         log_feats = self.log2feats(log_seqs)
         final_feat = log_feats[:, -1, :]
         item_embs = self.item_emb(torch.LongTensor(item_indices).to(self.dev))
@@ -270,265 +201,86 @@ class SASRec(nn.Module):
         return logits
 
 
-# ============================================================
-# 4. 评估（全量物品 × 全量用户，分批）
-# ============================================================
+class SasrecTrainer:
+    """SASRec 专属训练器：WarpSampler 负采样 + BCE + Adam(betas=(0.9,0.98))。
 
-@torch.no_grad()
-def evaluate_full(model, dataset, args, mode="test"):
+    构造顺序（WarpSampler → criterion → optimizer）与原 run_seed 逐字一致，
+    不可调换：WarpSampler 必须在模型 xavier 初始化之后创建。
     """
-    全量物品评估（非 100 负采样），与 TA-SID 评估协议一致。
 
-    mode="val":   seq = valid.parquet 的 history, target = valid.target
-                  （与 T5 模型选择的验证集严格一致）
-    mode="test":  seq = test.parquet 的 history,  target = test.target
-                  （与 T5 最终测试集严格一致）
-    """
-    if mode == "val":
-        seq_dict = dataset["val_seq"]
-        target_dict = dataset["valid"]
-    else:
-        seq_dict = dataset["test_seq"]
-        target_dict = dataset["test"]
+    def __init__(self, model, dataset, args, seed):
+        self.model = model
+        self.args = args
+        # n_workers 默认沿用原行为（cpu=1 / cuda=3）；显式设为 1 时采样串行化，
+        # 整条训练路径变为逐位可复现（多 worker 时 batch 到达顺序由 OS 调度决定，
+        # **不可**跨运行复现——这不是重构引入的，原版同样如此，见
+        # doc/seq_baselines_report.md「可复现性边界」）。
+        self.sampler = WarpSampler(dataset["train"], dataset["usernum"], dataset["itemnum"],
+                                   batch_size=args.batch_size,
+                                   maxlen=args.maxlen,
+                                   n_workers=(args.n_workers if args.n_workers
+                                              else (1 if args.device == "cpu" else 3)),
+                                   base_seed=seed)
+        self.bce_criterion = nn.BCEWithLogitsLoss()
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
+        self.num_batch = (len(dataset["train"]) - 1) // args.batch_size + 1
 
-    users = [u for u in dataset["train"]
-             if u in seq_dict and u in target_dict
-             and len(seq_dict[u]) >= 1 and len(target_dict[u]) >= 1]
-    users = sorted(users)
-
-    NDCG = {5: 0.0, 10: 0.0, 20: 0.0}
-    HIT = {5: 0.0, 10: 0.0, 20: 0.0}
-    itemnum = dataset["itemnum"]
-    all_items = np.arange(1, itemnum + 1)
-
-    eval_batch = 512
-    for i in range(0, len(users), eval_batch):
-        ub = users[i:i + eval_batch]
-        seqs = np.zeros((len(ub), args.maxlen), dtype=np.int32)
-        targets = np.zeros(len(ub), dtype=np.int32)
-        for j, u in enumerate(ub):
-            history = seq_dict[u][-args.maxlen:]
-            seqs[j, args.maxlen - len(history):] = history
-            targets[j] = target_dict[u][0]
-
-        # logits 形状 (B, itemnum)（matmul 广播：item_embs (itemnum,hidden) × (B,hidden,1) → (B,itemnum,1)）
-        logits = model.predict(np.array(ub), seqs, all_items)
-        preds = logits.cpu().numpy()
-
-        for j in range(len(ub)):
-            rank = (-preds[j]).argsort().argsort()[targets[j] - 1]
-            for k in [5, 10, 20]:
-                if rank < k:
-                    HIT[k] += 1
-                    NDCG[k] += 1 / np.log2(rank + 2)
-
-    n = len(users)
-    for k in [5, 10, 20]:
-        NDCG[k] /= max(n, 1)
-        HIT[k] /= max(n, 1)
-
-    return NDCG, HIT, n
-
-
-# ============================================================
-# 5. 单 seed 训练
-# ============================================================
-
-def run_seed(args, seed, dataset, out_dir):
-    print(f"\n{'=' * 60}\n  {args.dataset} — seed {seed}\n{'=' * 60}", flush=True)
-
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    model = SASRec(dataset["usernum"], dataset["itemnum"], args).to(args.device)
-
-    # Xavier 初始化
-    for name, param in model.named_parameters():
-        try:
-            if param.dim() > 1:
-                nn.init.xavier_normal_(param.data)
-        except Exception:
-            pass
-    model.pos_emb.weight.data[0, :] = 0
-    model.item_emb.weight.data[0, :] = 0
-
-    sampler = WarpSampler(dataset["train"], dataset["usernum"], dataset["itemnum"],
-                          batch_size=args.batch_size,
-                          maxlen=args.maxlen,
-                          n_workers=1 if args.device == "cpu" else 3,
-                          base_seed=seed)
-
-    bce_criterion = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
-
-    epoch_log = os.path.join(out_dir, f"seed{seed}_epochs.txt")
-    with open(epoch_log, "w") as f:
-        f.write("epoch\tval_ndcg@20\ttest_ndcg@20\tval_recall@20\ttest_recall@20\n")
-
-    num_batch = (len(dataset["train"]) - 1) // args.batch_size + 1
-    best_val_ndcg = -1.0
-    best_epoch = 0
-    best_metrics = None
-    no_improve = 0
-    t0 = time.time()
-
-    for epoch in range(1, args.num_epochs + 1):
-        model.train()
-        for step in range(num_batch):
-            u, seq, pos, neg = sampler.next_batch()
+    def train_epoch(self, epoch):
+        model, args = self.model, self.args
+        for step in range(self.num_batch):
+            u, seq, pos, neg = self.sampler.next_batch()
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             pos_logits, neg_logits = model(u, seq, pos, neg)
 
             pos_labels = torch.ones(pos_logits.shape, device=args.device)
             neg_labels = torch.zeros(neg_logits.shape, device=args.device)
 
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             indices = np.where(pos != 0)
-            loss = bce_criterion(pos_logits[indices], pos_labels[indices])
-            loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+            loss = self.bce_criterion(pos_logits[indices], pos_labels[indices])
+            loss += self.bce_criterion(neg_logits[indices], neg_labels[indices])
             for param in model.item_emb.parameters():
                 loss += args.l2_emb * torch.sum(param ** 2)
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
-        if epoch % args.eval_interval == 0 or epoch == args.num_epochs:
-            model.eval()
-            print(f"\n  Epoch {epoch} ({(time.time() - t0) / 60:.1f} min):", flush=True)
+    def close(self):
+        self.sampler.close()
 
-            val_ndcg, val_recall, val_users = evaluate_full(model, dataset, args, "val")
-            print(f"    Val:  N@5={val_ndcg[5]:.4f} N@10={val_ndcg[10]:.4f} N@20={val_ndcg[20]:.4f} "
-                  f"R@20={val_recall[20]:.4f} ({val_users} users)", flush=True)
 
-            test_ndcg, test_recall, test_users = evaluate_full(model, dataset, args, "test")
-            print(f"    Test: N@5={test_ndcg[5]:.4f} N@10={test_ndcg[10]:.4f} N@20={test_ndcg[20]:.4f} "
-                  f"R@20={test_recall[20]:.4f} ({test_users} users)", flush=True)
-
-            with open(epoch_log, "a") as f:
-                f.write(f"{epoch}\t{val_ndcg[20]:.6f}\t{test_ndcg[20]:.6f}\t"
-                        f"{val_recall[20]:.6f}\t{test_recall[20]:.6f}\n")
-
-            if val_ndcg[20] > best_val_ndcg:
-                best_val_ndcg = val_ndcg[20]
-                best_epoch = epoch
-                best_metrics = (val_ndcg, val_recall, test_ndcg, test_recall)
-                ckpt_path = os.path.join(out_dir, f"seed{seed}_best.pth")
-                torch.save(model.state_dict(), ckpt_path)
-                no_improve = 0
-                print(f"    ⭐ Saved best checkpoint @ epoch {epoch}", flush=True)
-            else:
-                no_improve += 1
-                if no_improve >= args.patience:
-                    print(f"    ⏹ Early stop @ epoch {epoch} (no improvement for "
-                          f"{args.patience} evals)", flush=True)
-                    break
-
-            t0 = time.time()
-
-    sampler.close()
-    return best_metrics, best_epoch
+def sasrec_model_factory(args, dataset):
+    """建模型 + Xavier 初始化（顺序与原 run_seed L344-354 逐字一致）。"""
+    model = SASRec(dataset["usernum"], dataset["itemnum"], args).to(args.device)
+    xavier_init_zeros(model, [("pos_emb", 0), ("item_emb", 0)])
+    return model
 
 
 # ============================================================
-# 6. 主流程
+# 3. 主流程
 # ============================================================
-
-METRIC_NAMES = ["NDCG@5", "NDCG@10", "NDCG@20", "Rec@5", "Rec@10", "Rec@20"]
-
-
-def collect_metrics(best_metrics):
-    """从 (val_ndcg, val_recall, test_ndcg, test_recall) 提取 test 6 个指标"""
-    val_ndcg, val_recall, test_ndcg, test_recall = best_metrics
-    return [test_ndcg[5], test_ndcg[10], test_ndcg[20],
-            test_recall[5], test_recall[10], test_recall[20]]
-
 
 def main():
     parser = argparse.ArgumentParser(description="SASRec Baseline for TA-SID (aligned, 3-seed)")
     parser.add_argument("--dataset", type=str, required=True,
                         choices=["Sport", "Toys", "Beauty", "all"])
     parser.add_argument("--seeds", type=int, nargs="+", default=[2025, 2026, 2027])
-    parser.add_argument("--data_dir", type=str, default="data")
     parser.add_argument("--output_dir", type=str, default="sasrec_output")
-    parser.add_argument("--batch_size", default=128, type=int)
-    parser.add_argument("--lr", default=0.001, type=float)
-    parser.add_argument("--maxlen", default=200, type=int)
-    parser.add_argument("--hidden_units", default=50, type=int)
     parser.add_argument("--num_blocks", default=2, type=int)
-    parser.add_argument("--num_epochs", default=200, type=int)
     parser.add_argument("--num_heads", default=1, type=int)
-    parser.add_argument("--dropout_rate", default=0.2, type=float)
     parser.add_argument("--l2_emb", default=0.0, type=float)
-    parser.add_argument("--device", default="cuda", type=str)
-    parser.add_argument("--eval_interval", default=20, type=int,
-                        help="每 N 个 epoch 评估一次")
-    parser.add_argument("--patience", default=5, type=int,
-                        help="val NDCG@20 连续 N 次评估无改善则早停")
+    parser.add_argument("--n_workers", default=None, type=int,
+                        help="WarpSampler 进程数。默认 None = 原行为（cpu 1 / cuda 3）。"
+                             "设为 1 使训练路径逐位可复现（重构等价性门禁用）。")
+    add_common_args(parser)
     args = parser.parse_args()
 
-    if args.device != "cpu":
-        assert torch.cuda.is_available(), "cuda requested but unavailable"
-        args.device = "cuda"
-
+    resolve_device(args)
     datasets = ["Sport", "Toys", "Beauty"] if args.dataset == "all" else [args.dataset]
 
-    for ds in datasets:
-        data_path = os.path.join(args.data_dir, ds)
-        out_dir = os.path.join(args.output_dir, ds)
-        os.makedirs(out_dir, exist_ok=True)
-
-        print(f"\n{'=' * 60}\n=== SASRec Baseline (aligned, 3-seed): {ds} ===\n{'=' * 60}")
-        print(f"Output: {out_dir}")
-
-        print("\n[1/3] Loading data...")
-        (user_train, user_valid, user_val_seq,
-         user_test, user_test_seq, itemnum) = load_tiger_data(data_path)
-
-        dataset = {
-            "train": user_train,
-            "valid": user_valid,
-            "val_seq": user_val_seq,
-            "test": user_test,
-            "test_seq": user_test_seq,
-            "usernum": max(user_train.keys()),
-            "itemnum": itemnum,
-        }
-
-        per_seed = {}
-        for seed in args.seeds:
-            best_metrics, best_epoch = run_seed(args, seed, dataset, out_dir)
-            if best_metrics is not None:
-                per_seed[seed] = {
-                    "metrics": collect_metrics(best_metrics),
-                    "best_epoch": best_epoch,
-                }
-
-        # 汇总 mean±std
-        print("\n" + "=" * 60)
-        print(f"  {ds} — SASRec 3-seed Test Summary (best-val checkpoint)")
-        print("=" * 60)
-        summary = os.path.join(out_dir, "summary_3seed.txt")
-        with open(summary, "w") as f:
-            f.write(f"# SASRec {ds} — 3-seed aligned test metrics\n")
-            f.write("# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)\n")
-            f.write("# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint\n\n")
-            f.write("seed\t" + "\t".join(METRIC_NAMES) + "\n")
-            for seed, info in per_seed.items():
-                f.write(f"{seed}\t" + "\t".join(f"{m:.6f}" for m in info["metrics"])
-                        + f"\t(best epoch {info['best_epoch']})\n")
-            if len(per_seed) >= 2:
-                arr = np.array([info["metrics"] for info in per_seed.values()])
-                mean = arr.mean(axis=0)
-                std = arr.std(axis=0)
-                f.write("\nmean\t" + "\t".join(f"{m:.6f}" for m in mean) + "\n")
-                f.write("std\t" + "\t".join(f"{m:.6f}" for m in std) + "\n")
-                print(f"\n  {'Metric':<10} {'mean':<12} {'std':<12}")
-                for name, m, s in zip(METRIC_NAMES, mean, std):
-                    print(f"  {name:<10} {m:.4f}±{s:.4f}")
-
-        print(f"\n✅ Summary saved to {summary}")
-
-    print("\n✅ 全部完成.")
+    run_datasets(args, datasets,
+                 method_name=METHOD_NAME,
+                 model_factory=sasrec_model_factory,
+                 trainer_factory=SasrecTrainer)
 
 
 if __name__ == "__main__":

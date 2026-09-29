@@ -1,3 +1,12 @@
+> ⚠️⚠️ **2026-09-27 订正：本文件（2026-09-23 原始输出，下文原样保留）中 Toys 的 TA-SID 行已作废。**
+> 根因：TA-SID 被喂了 `fused_item_emb.parquet` —— 该文件在 Sport/Toys 上是 **4224d**（4096d 内容 ⊕ 128d 行为），
+> 不是其余 5 个变体所用的 896d。故下文「`TA-SID  fused_item_emb.parquet  dim=4224`」、
+> 「`TA-SID AUC=0.7835`」以及由此得出的「量化前 AUC 排序把 TA-SID 判为末位」**全部是这一个维度 bug 的产物**。
+> 正确 896d 文件（`fused_item_emb_768d.parquet`）下：**TA-SID 是第 1 名，AUC = 0.9828**（主口径 topk × degmatch）。
+> **其余 5 个变体的数值逐位有效**（已被 `tools/stage_probe.py --audit_a` 独立复现）。
+> **⇒ 勿引用本文件的 TA-SID 行、"dim=4224" 与"量化前排序"结论。** CSV 中对应 4 行已加 `space_dim_ok=False` 标注。
+> 权威记录：`notes/15_g2_stage_seed_robustness_plan.md` §10。脚本已修：`tools/beauty_preflight_probe.py`。
+
 ```
 ====================================================================================================
 Beauty 补齐变体 — 量化前（fused 896d）行为结构 pre-flight 诊断

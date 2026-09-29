@@ -51,8 +51,9 @@ Toys:   0.0336 → 0.0377 NDCG@20 (+12.2% vs content-only TIGER, +56.4% vs SASRe
 1. 首次将商品-商品转移动态引入 SID 生成
 2. 简单的 LN+Concat 融合 → 与现有 RQ-VAE 流水线即插即用
 3. 全面评估：3 个数据集 × 3 seed（均值±std，零 seed 交叉），相对纯内容 TIGER 提升 +12.2%~+17.1%
-4. 分析实验证明：转移信号与内容信号正交（Jaccard=0.02, ρ=0.02），转移一致性 AUC 三数据集占优
-5. **（第二创新，⚠ 2026-09-04 改写）防塌缩健康量化诊断**：RQ-VAE 粗层码本可能**静默分配崩坏**（Toys seed2024 L0 仅用 62/256 码，recon loss 不可见、仅 z-gap=0.093 检出），且崩坏对初始化敏感（换健康种子 256 即近无损：z-gap≤0.004、NDCG 0.0372≈512 的 0.0381）。贡献改为：**z-gap 事后判据**（recon 不可见的坏码本唯一探测器，6 数据集全对、不误触发）+ **reseed 兜底**（~8min/次，0 T5），坏码本真实代价 NDCG −1.4% / R@20 −3.8%。~~原"自适应扩容 K0\*=512 / +3.8%"卖点已推翻~~（见 [E46](e46_second_innovation_overturn.md)）
+4. 分析实验证明：转移一致性 AUC（度匹配负采样）三数据集**两端稳健、中间分层**——行为结构确实被编码进了量化后的 SID 空间
+
+> **⚠ 2026-09-29 第二创新裁撤声明。** 本文为**单创新点论文**，唯一贡献为第 1–4 条所描述的"将商品-商品行为转移结构注入量化前的连续表示"。原第五点（防塌缩健康量化诊断 / 自适应粗层容量分配 K0\*）**已正式裁撤，不作为贡献主张**；相关 z-gap 判据、capacity stress、reseed 兜底等材料仅作**探索性记录**压缩保留（见 §7.8 说明条与 [e46_second_innovation_overturn.md](e46_second_innovation_overturn.md) / [e47_seed_health_isolation.md](e47_seed_health_isolation.md)），**不得出现在摘要、引言贡献列表、章节标题或结论中**。
 
 ---
 
@@ -132,38 +133,19 @@ Toys:   0.0336 → 0.0377 NDCG@20 (+12.2% vs content-only TIGER, +56.4% vs SASRe
 - 仅改变输入嵌入
 - 可直接替换现有 TIGER 流水线 → 实用价值
 
-### 4.6 ~~Adaptive Coarse-Level Capacity Allocation~~ → 防塌缩健康量化（第二创新，2026-09-04 改写）
+### 4.6 （裁撤）~~Adaptive Coarse-Level Capacity Allocation / 防塌缩健康量化~~
 
-> ⚠ 本节原"自适应扩容"算法与"Toys 需 K0\*=512"结论已被 E45 推翻（详见 [e46_second_innovation_overturn.md](e46_second_innovation_overturn.md)）。
-> 保留的是：**z-gap 判据 + 事后检测 + reseed 兜底**（防塌缩健康量化诊断）；"扩容动作"降级为可选项。
-> 论文写作时勿再写"扩容 → +3.8%"或"Toys 容量不足需 512"。
-
-**动机（保留且加强）：** RQ-VAE 粗层码本可能**静默分配崩坏**——Toys seed2024 的 L0 只用 62/256 码
-且摆放次优，但**重构损失(recon)与健康码本几乎无差、完全不可见**，只有转移结构判据 z-gap=0.093
-能检出；真实代价 = 推荐层 NDCG −1.4% / R@20 −3.8%。更关键的是**崩坏对初始化敏感**：同数据同配置仅换
-RQ-VAE 种子（2025/2026），256 即健康（L0 59–76%、z-gap≤0.004）→ 任何一次训练都可能塌，固定 K0
-（无论 256/512）只保证"平均"够用，**事后 z-gap 检测是唯一兜底**。
-
-**算法（改写：动作从"扩容"改为"reseed"，保留 z-gap 门）：**
-```
-输入: 数据 D、item embeddings E、容差 ε=0.01、最大重试次数 R=3
-1  训练 RQ-VAE(D; K0=256, K1=256, K2=256)
-2  生成 SID → 重建 xq[full]
-3  z-gap ← AUC(z) − AUC(xq[full])       # 转移结构量化损失（recon 不可见的塌缩探测器）
-4  if z-gap ≤ ε: 接受                      # 健康，交付 codes
-5  else: 换种子 reseed 重训（K0 不变）→ 回 2，至多 R 次；仍失败再考虑扩容 K0←2·K0
-6  返回健康 codes（z-gap ≤ ε）
-```
-
-**关键设计：**
-- 判据 = **z-gap**（量化后转移一致性 AUC 损失）→ 直接度量"transition structure 丢了多少"，训练后可算
-- **为何是 z-gap 而非 recon**：塌缩态 recon MSE 与健康态无显著差异（0.1452 vs 0.1414@512、健康256 亦同量级）→ 唯 z-gap 能当探测器（R1/R2）
-- **修复动作 = reseed**（RQ-VAE ~8 min/次、0 T5），比扩容(256→512 需重训 RQ-VAE + 全部 T5)更便宜、更对症
-- **转移熵不可作 predictor**（负面结果，保留）：Toys H=3.52bits 最低却最需修复，方向相反——H(B|A) 测行为层不可预测性，与 z 空间簇结构无关（详细见 §7.8）
-- 机制确定过程（4.2，保留）：E1 L0 occupancy 诊断 → E2 post-hoc 容量曲线 → E3 重训验证 → E44 六数据集判据精度 → E45 多种子（详情见 e42/e44/e45 文档）
-
-**执行结果（改写）：** Toys seed2024 单次训练落到 512 才健康（原"自适应"输出 K0\*=512），但
-seed2025/2026 在 256 即健康且推荐层 ≈512 → **"容量不足需 512"不成立，瓶颈是码本健康度**。
+> **⚠ 2026-09-29 本节整节裁撤。** 本节原为第二创新点（自适应粗层容量分配 → 防塌缩健康量化诊断），
+> 其核心卖点（K0\* = 512、"+3.8%"、传导剂量）已被 E45/E46 推翻，§4 方法章节**不再包含任何第二创新内容**。
+> 本文 §4 只写 §4.1–§4.5 一条主线：转移图 → PPMI+SVD → LN+Concat → RQ-VAE。
+> **禁止在 §4 出现"Adaptive Capacity / Adaptive Transition-Preserving Quantization / BSR / Semantic ID quality screening"等提法。**
+>
+> 具有独立价值、但不构成创新的诊断观察压缩为一句探索性说明（可选，置于附录或 §7 末尾脚注）：
+> RQ-VAE 粗层码本的分配质量与重构损失弱相关，代码本塌缩可在 recon 上不可见；在本文设置下该现象
+> 仅出现在 TA-SID × Toys × seed2024 这一特定组合（1/3 种子），换种子即恢复，content-only / ZeroPad
+> 各种子均健康 → 归因为**该组合下的初始化特例**，而非"任何训练都可能塌"，更非"维度不足"。
+> 详情见 [e46_second_innovation_overturn.md](e46_second_innovation_overturn.md) 与
+> [e47_seed_health_isolation.md](e47_seed_health_isolation.md)。**此说明仅作稳健性/可复现性备注，不得升级为贡献。**
 
 ---
 
@@ -215,8 +197,8 @@ seed2025/2026 在 256 即健康且推荐层 ≈512 → **"容量不足需 512"�
 
 ### 6.2 关键观察
 
-- **Sport 提升最大（+17.1%）**：稀疏数据集上，行为信号提供了纯内容无法捕捉的转移模式
-- **Toys 提升最小（+12.2%）**：稠密数据上 content 已够用，各方法趋于饱和，转移为增量收益
+- **Sport 提升最大（+17.1%）**：交互密度最低（0.045%）、平均序列最短（8.32）的数据集上，行为信号提供了纯内容无法捕捉的转移模式
+- **Beauty / Toys 增益相当且较小（+15.9% / +12.2%）**：⚠ **勿写"Toys 稠密故饱和"**——Beauty（0.0734%）与 Toys（0.0724%）密度几乎相同，增益却差 3.7pp，**密度与序列长都解释不了该排序**。统一写法："最稀疏的 Sport 增益最大，其余两数据集增益相当且较小；Beauty 与 Toys 间差异归因于数据分布差异，不做过度解读。"（口径见 [paper_main_results.md §2.1](paper_main_results.md)）
 - **3 seed 零交叉**：TA-SID 每个 seed 都高于对应 baseline，std≤0.001 → 提升稳定，非 seed 偶然（审稿人复现得到一致结论）
 - **SASRec 对齐后（v2）**：三个数据集上均为 SASRec < Content-only < TA-SID 的清晰层次；对齐任务（预测 i_L）对 SASRec 更严苛，其相对 margin 全面扩大（N@20 +56.4%~+139.5%）→ 转移注入是内容之上的增量收益
 
@@ -273,18 +255,23 @@ seed2025/2026 在 256 即健康且推荐层 ≈512 → **"容量不足需 512"�
 
 ### 7.3 转移一致性（AUC，量化空间）与碰撞率
 
-**指标：** 在量化输出空间（SID 码重建 x_q）比较高频转移对 vs 随机商品对的余弦相似度。**AUC = P(转移对相似度 > 随机对相似度)**，0.5=随机（转移未编码），等价于 Link Prediction 的标准 AUC（Mann-Whitney U）。
+**指标：** 在量化输出空间（SID 码重建 $x_q^{[\mathrm{full}]}$）比较高频转移对 vs **度匹配非边对**的余弦相似度。**AUC = P(转移对相似度 > 非边对相似度)**，0.5=随机（转移未编码），等价于 Link Prediction 的标准 AUC（Mann-Whitney U）。
+
+> **负采样口径（统一为度匹配）：** 负样本取与正样本端点同处一个 $\lfloor\log_2 \deg\rfloor$ 度分桶的非边对，**以降低节点流行度差异带来的结构预测偏差**（均匀采样下负样本端点平均度数仅为正样本的约 1/9，会产生虚高分数）。
+> ⚠ 旧的 uniform 负采样口径数值（Beauty 0.869 / Sport 0.962 / Toys 0.872）**已废弃，勿引用**；两套数值不可并列。
 
 | 指标 | Sport | Beauty | Toys |
 |:----|:----:|:----:|:------:|
-| **TA-SID AUC** | **0.962** | **0.869** | **0.872** |
-| Content-only AUC | 0.900 | 0.753 | 0.863 |
+| **TA-SID AUC** | **0.9647** | **0.9560** | **0.9651** |
+| Content-only AUC | 0.9080 | 0.8365 | 0.8751 |
+| Shuffled AUC（错配行为下界） | 0.8763 | 0.7974 | 0.8127 |
 | TA-SID 碰撞率 | 10.66% | 1.09% | 8.68% |
 
 **解读：**
-- **TA-SID AUC 三数据集全部占优**（Δ+0.062 / +0.115 / +0.009）→ 在 SID 量化空间，TA-SID 更可靠地把转移对从普通对中区分出来
-- **为什么不能用绝对 cos**：content-only 的码本把商品挤成一团（随机对 cos 0.65），绝对 cos 虚高；TA-SID 撑开商品（随机对 0.35）同时转移对保持 0.74-0.82 → **转移被专门编码**。对应对比学习 alignment-uniformity 框架（Wang & Isola 2020）
-- **Toys ΔAUC 最小**：与主实验 Toys 提升最小（+12.2%）一致——稠密数据饱和，转移信号边际贡献小，论文诚实报告
+- **TA-SID AUC 三数据集全部占优**（Δ vs Content-only = +0.0568 / +0.1195 / +0.0900）且恒为全变体最高 → 在 SID 量化空间，TA-SID 更可靠地把转移对从非边对中区分出来
+- **两端稳健、中间分层**：TA-SID 恒居首、Shuffled（错配行为）恒居末且**低于"完全不给行为"的 Content-only**；中间变体（ItemCF / Raw-CoOcc / ZeroPad）的具体名次跨数据集不完全一致 → 论文只主张"**两端 + 分层**"，不主张逐名次同序
+- **为什么不能用绝对 cos**：content-only 的码本把商品挤成一团，转移对与普通对的绝对余弦**同时**虚高 → 绝对 cos 混入"整体聚集度"这一与转移编码无关的量；AUC 剥离该干扰。对应对比学习 alignment-uniformity 框架（Wang & Isola 2020）
+- ⚠ **诚实说明（量级不对应）**：ΔAUC 的绝对量级与主实验 NDCG@20 提升幅度**不对应**（按 ΔAUC 为 Beauty > Toys > Sport，按 NDCG 为 Sport > Beauty > Toys）。跨数据集可迁移的是"分层与两端"，不是具体名次或量级；本指标**不作跨数据集绝对阈值**，不写"Toys ΔAUC 最小故提升最小"。
 
 ### 7.4 内容维度的影响
 
@@ -297,19 +284,11 @@ seed2025/2026 在 256 即健康且推荐层 ≈512 → **"容量不足需 512"�
 - RQ-VAE 偏好适中维度的输入；过高维度会稀释码本有效性
 - （768d 报 3-seed 均值以对齐主实验表；4096d 为 seed2025 单值，对比方向三数据集一致）
 
-### 7.5 嵌入正交性分析
+> **〔2026-09-29 整节删除〕原 §7.5「嵌入正交性分析」已删除，不进正文、附录与贡献列表。**
+> 理由：① 该节数字**无产出物、不可溯源**（仅本大纲与 `paper_draft_zh_method_exp.md` 两处草稿有 0.0167/0.0216/0.0193，`analyze_emb_orthogonality.py` 只 print 不落盘，且脚本只算 k=20、算不出表里的 Top-10 行）；② 其指标名 "Jaccard" 实为 `overlap/k`，非真 Jaccard；③ 数字基于**已弃用的 4096d** 内容嵌入，与 768d 主口径不一致；④ 更根本地，"低相关 ⟹ 互补" 不成立（低相关只证明**不同**，不证明**有用**；随机向量同样 ρ≈0），且该结果近乎由构造决定（一边是共现矩阵的 128 维谱嵌入，一边是文本语义嵌入，二者不同是预期而非发现，随机 128 维向量同样得到 ρ≈0）。
+> **非冗余性的决定性证据在 §7.2**（内容固定、仅替换行为通道 → 下游指标显著分化：Content-only 0.0275 / ZeroPad 0.0286 / Shuffled 0.0262 / TA-SID 0.0327）与 **§7.3**（六变体 AUC 0.7974–0.9651）。**本文不对两通道的嵌入独立性做统计学主张。**
 
-**核心发现：** 内容嵌入与行为嵌入编码了几乎正交的信息。
-
-| 指标 | 数值 |
-|:-------|:-----:|
-| Top-10 近邻 Jaccard | 0.0167 |
-| Top-20 近邻 Jaccard | 0.0216 |
-| Spearman ρ（成对距离） | 0.0193 |
-
-→ 两种模态捕捉了**完全不同的**商品特征。融合不是冗余，而是互补。
-
-### 7.6 长尾分析
+### 7.5 长尾分析
 
 | 分组 | Sport R@20 | Sport N@20 | Toys R@20 | Toys N@20 |
 |:------|:---------:|:---------:|:---------:|:---------:|
@@ -321,87 +300,28 @@ seed2025/2026 在 256 即健康且推荐层 ≈512 → **"容量不足需 512"�
 - 两个数据集呈现相同模式 → T5 的固有限制
 - Toys（更稠密）对尾部商品略好
 
-### 7.7 t-SNE 可视化
+### 7.6 t-SNE 可视化
 
 - 融合嵌入比纯内容嵌入具有更清晰的商品聚类结构
 - 内容嵌入按商品类别聚类，行为嵌入按消费模式聚类
 - 两者互补 → 融合嵌入同时保留了两种结构
 
-### 7.8 ~~Adaptive Capacity 有效性验证~~ → 防塌缩健康量化诊断（第二创新实验，§4.6 改写）
+### 7.7 （裁撤）~~Adaptive Capacity 有效性验证 / 防塌缩健康量化诊断~~
 
-> ⚠ **2026-09-04 推翻裁定**：本节的 Q3（"+3.8% 扩容卖点"）与"Toys 容量不足态"已由 E45 推翻——Toys
-> 塌缩是 seed2024 单次训练的分配崩坏（换种子 256 健康，z-gap≤0.004），健康 256 的 T5 NDCG=0.0372 ≈
-> 512 的 0.0381（无统计差异），**扩容无稳健推荐层收益**。保留的结论 = **z-gap 事后判据能检出 recon
-> 不可见的坏码本 + 按需 reseed 兜底**。Q1/Q2 表保留为判据证据；Q3 按 E45 判 (a) 改写。权威裁定见
-> [e46_second_innovation_overturn.md](e46_second_innovation_overturn.md)；历史表见 [e43_adaptive_experiment.md](e43_adaptive_experiment.md)。
-
-回答三个问题（Q1 结构检测 / Q2 判据优于朴素信号 / Q3 坏码本转推荐损失 + 修复价值）。
-
-**Q1 — z-gap 是否识别分配崩坏 / 健康（SID 质量，判据证据）✓（保留）**
-
-| Dataset | K0 | 状态 | z-gap | xq[full] AUC | L0 用码(util) |
-|:--|:--|:--|--:|--:|--:|
-| Beauty | 256 | 健康 | 0.0001 | 0.8676 | 204/256 (80%) |
-| Sport | 256 | 健康 | 0.0032 | 0.9614 | 249/256 (97%) |
-| Toys（seed2024） | 256 | **分配崩坏** ⚠ | **0.0931** | 0.8724 | 62/256 (24%) |
-| Toys（seed2025，E45） | 256 | ✅ 健康 | **0.0016** | 0.9672 | 194/256 (76%) |
-| Toys（seed2024 扩容后） | 512 | 健康（落健康分配） | 0.0045 | 0.968 | 305/512 (60%) |
-
-→ 判据证据：z-gap 区分"分配崩坏 vs 健康"，且崩坏可由**换种子（reseed，K0 不变）**而非扩容修复
-（seed2025 同 256 即 z-gap 0.0016）；Beauty/Sport/MI/Electronics 判据不误触发（见 E44 §10.3）。
-
-**Q2 — z-gap 判据是否优于朴素信号 ✓（保留；E44 判据精度表）**
-z-gap 6 数据集最终判定全对；裸 L0 利用率在 MI（塌缩却无损）与 Electronics（100% 却扩容无效）判错两个
-方向；Sport 压到 K0=64 仍不误触发。**判据精度与"扩容动作"解耦，全部保留**（E44 §10.3 / E46 R2）。
-注：原"Adaptive(512) 优于 Fixed-large(1024)"的 Q2 表述已随扩容叙事撤销——真实教训是**不必扩容**
-（见 Q3 判 a：512 与健康 256 无差异），扩容至多是一个"顺带落到健康分配"的偶然手段。
-
-**Q3 — 坏码本的推荐层代价 + 修复价值（Toys T5, 3-seed；⚠ 2026-09-04 判 (a)）**
-
-| codes 来源 | NDCG@20 | R@20 |
-|:--|--:|--:|
-| 256 **塌缩**（seed2024） | 0.0367±0.0006 | 0.0873±0.0016 |
-| 256 **健康**（seed2025，判a 补跑） | **0.0372±0.0012** | **0.0906±0.0037** |
-| 512（seed2024，落健康态） | 0.0381±0.0023 | 0.0914±0.0060 |
-| 1024（Fixed-large） | 0.0384±0.0005 | 0.0916±0.0005 |
-
-> ⚠️ **2026-09-09 provenance 订正**：上一行 "256 **塌缩**（seed2024）= 0.0367±0.0006 / 0.0873±0.0016" 出自**孤儿 codes**（无法从现存 ckpt 复现），作为 Toys **正式结果已作废**；仅保留作"塌缩实例"历史对照。Toys 正式主结果 = NDCG@20 **0.0377±0.0007** / R@20 0.0911±0.0020。权威记录见 [e48_toys_main_codes_provenance_fix.md](e48_toys_main_codes_provenance_fix.md)。
-
-→ **判 (a)**：健康 256（0.0372）≈ 512（0.0381）≈ 1024（0.0384），std 全部重叠、无统计差异 ⇒
-**扩容在推荐层无稳健额外收益**。原 "+3.8% vs 固定 256" 来自"固定 256"那行是 seed2024 塌缩 codes：
-真实信息是**坏码本代价 NDCG −1.4% / R@20 −3.8%**（相对健康 256），且 recon 不可见、只有 z-gap 检出。
-**修复 = reseed（更便宜）而非扩容。**
-
-**状态洞察（机制理解，Toys 改名）：**
-- 健康态（Sport / Beauty / 健康种子的 Toys 256）：z 高 + L0 高占用 + gap≈0 → 无需干预
-- 结构受限态（Beauty）：z 低 + gap≈0 且扩容无收益 → 扩容无意义
-- **分配崩坏态（Toys seed2024 单例）**：z 高 + L0 塌缩 24% + gap 0.093 → **初始化敏感、需 reseed 兜底**
-  （原"容量不足态"命名已废，见 E46 O1/O5）
-- 塌缩但无损态（MI）/ 饱和但无效态（Electronics）/ 压测仍无损态（Sport K0=64）：判据不误触发（负对照）
-
-**负面结果（如实报告，保留）：** 转移熵不能预测量化健康（Toys H 最低却最需修复，方向相反）；单层
-k-means 内在簇数也与 3-token 量化不一致。→ 可靠的探测器是训练后的 z-gap。
-
-**压测负对照（2026-09-03 补，判据不误触发；保留）：** 试图在健康数据 Sport 上人为压小粗层容量制造
-第二个"容量不足"正例，**压不出来**——
-
-| K0（Sport） | L0 用码 | xq[L0] AUC | xq[full] AUC | **z-gap** | 判定 |
-|:--|:--|--:|--:|--:|:--|
-| 256 | 249/256 (97%) | 0.9448 | 0.9614 | 0.0032 | 无损 |
-| 128 | 128/128 (100%) | 0.9468 | 0.9635 | **0.0011** | 无损 |
-| 64 | 64/64 (100%) | 0.9229 | 0.9526 | **0.0032** | 无损 |
-
-→ 即便 K0 压到 1/4、xq[L0] 明显下降（0.945→0.923），L1/L2 残差把结构几乎全补回，判据仍不误触发。
-压小 K0 只能制造"容量饿死"，复现不了 Toys 的**训练期 L0 分配崩坏**（62/256 且摆放次优）→ 证伪
-"容量吃紧=必塌"的朴素猜想，佐证 Toys 问题在 allocation 对初始化敏感。详细见 [e4x_sport_capacity_stress.md](e4x_sport_capacity_stress.md)。
-
-**多种子实锤 + 判 (a)（E45，2026-09-03~04 完成；改写原"进行中"段）：** RQ-VAE 种子曾硬编码于
-main.py（现暴露为 `--seed`，默认 2024 完全保复现）。Toys 量化端多种子复跑 → **结果 B 实锤**：
-seed2024 L0 62/256(z-gap 0.093)塌缩，但 seed2025 194/256(0.0016)、seed2026 151/256(0.0037)均健康 ⇒
-**分配崩坏对初始化敏感，不是 Toys 系统性容量不足**。健康 256 codes 上 T5 3-seed → 判 (a)：≈512，
-扩容无稳健收益。⇒ 第二创新叙事落为 **z-gap 事后检测 + reseed 兜底**（任何一次训练都可能塌，
-recon 不可见，唯一可靠保护是事后 z-gap）。脚本 `rqvae/run_multiseed_repro.sh` /
-`model/run_t5_multiseed.sh`，详见 [e45_toys_multiseed_collapse.md](e45_toys_multiseed_collapse.md)。
+> **⚠ 2026-09-29 本节整节裁撤，正文与附录均不再设此节。** 本节原为第二创新点的实验验证
+> （Q1/Q2/Q3、capacity stress、多种子实锤），其核心结论（扩容收益、K0\*=512、传导剂量）已被 E45/E46 推翻，
+> 判据类结果（z-gap）已在 §7.3 的稳健性/可复现性备注中一句带过。**禁止把本节任何内容写成贡献、节标题或摘要要点。**
+>
+> 仅保留一句探索性说明（置于 §7.3 末尾或附录脚注，可选）：
+> "当 RQ-VAE 粗层码本分配异常时，其后验转移一致性可能明显低于编码器输入空间；该现象可由训练后
+> 计算的一致性落差检出，而重构损失对其不敏感。在本文设置下该现象仅见于 TA-SID × Toys × seed2024
+> 的单一组合（3 个 RQ-VAE 种子中的 1 个），换种子即恢复；content-only 与 ZeroPad 各种子均正常。"
+>
+> 完整历史材料（Q1/Q2/Q3 表、E44 六数据集判据精度、E45 多种子、Sport 容量压测负对照、E47 归因隔离）
+> 仅作**历史实验记录**保留于仓库，引用时须注明"已裁撤的第二创新材料，非本文结论"：
+> [e43_adaptive_experiment.md](e43_adaptive_experiment.md)、[e44_five_dataset_summary.md](e44_five_dataset_summary.md)、
+> [e45_toys_multiseed_collapse.md](e45_toys_multiseed_collapse.md)、[e46_second_innovation_overturn.md](e46_second_innovation_overturn.md)、
+> [e47_seed_health_isolation.md](e47_seed_health_isolation.md)。
 
 ---
 
@@ -451,7 +371,7 @@ recon 不可见，唯一可靠保护是事后 z-gap）。脚本 `rqvae/run_multi
 - TA-SID 将商品转移动态引入 SID 生成
 - 简单的 LN+Concat 融合 → 3 个数据集上一致的提升（3 seed 均值±std，零交叉）
 - +12.2%~+17.1% NDCG@20 超越纯内容 TIGER，+56.4%~+139.5% 超越 SASRec（v2 对齐口径）
-- 正交性 + AUC 转移一致性证实：转移信号提供了内容之外的全新信息
+- AUC 转移一致性证实：转移信号提供了内容之外的全新信息（非冗余性见 §7.2 消融）
 
 **结论句：**
 > Transition dynamics are a powerful yet under-explored signal for SID generation. TA-SID shows that even a simple fusion of content and behavior via LN+Concat can yield substantial gains across diverse datasets, outperforming both pure-content SIDs and classical sequential recommenders.
@@ -470,9 +390,9 @@ recon 不可见，唯一可靠保护是事后 z-gap）。脚本 `rqvae/run_multi
 | §7.2 Transition 消融对照 | ZeroPad / Shuffled | experiment_results_summary.md §4.3 |
 | §7.3 转移一致性 | AUC 版 | experiment_results_summary.md §5.3 |
 | §7.4 维度对比 | 768 vs 4096 | experiment_dimension_manifest.md §六 |
-| §7.5 正交性分析 | embedding 分析 | analyze_emb_orthogonality.py 输出 |
-| §7.6 长尾分析 | Head/Mid/Tail | experiment_results_summary.md §五 |
-| §7.8 防塌缩健康量化诊断（第二创新，2026-09-04 改写） | z-gap 判据 / L0 util / 塌缩 vs 健康 / T5 NDCG@20+R@20 | e42_adaptive_k0_results.md（机制，历史）+ e43_adaptive_experiment.md（实验表，历史）+ e44_five_dataset_summary.md（六数据集判据精度）+ e4x_sport_capacity_stress.md（压测负对照）+ e45_toys_multiseed_collapse.md（多种子实锤结果 B + 判 a）+ **e46_second_innovation_overturn.md（推翻裁定，权威）** |
+| ~~§7.5 正交性分析~~ | **整节已删除（2026-09-29）**：数字不可溯源 + 基于弃用的 4096d + "低相关⟹互补" 不成立。非冗余性改由 §7.2 消融背书 | ~~`tools/analyze_emb_orthogonality.py`~~（**勿引用其输出**） |
+| §7.5 长尾分析 | Head/Mid/Tail | experiment_results_summary.md §五 |
+| ~~§7.7 防塌缩健康量化诊断~~ | **整节已裁撤（2026-09-29），不入正文与附录**；若保留一句探索性说明，素材出处见右栏 | e42_adaptive_k0_results.md / e43_adaptive_experiment.md / e44_five_dataset_summary.md / e45_toys_multiseed_collapse.md / **e46_second_innovation_overturn.md（推翻裁定，权威）** / e47_seed_health_isolation.md —— 均为历史材料，引用须注明"已裁撤第二创新，非本文结论" |
 | §8.1 ADC-SID 对比 | 文献对比 | ta_sid_vs_adc_sid_comparison.md |
 | §8.3 L_trans 负面 | Track B 实验 | experiment_results_summary.md §三 |
 
@@ -495,7 +415,7 @@ A3: 框架完全不同（backbone、特征、架构均不同），绝对数值�
 A4: 诚实说明这是 TIGER 家族的固有限制。引用 LIGER 作为已知改进方向。在未来工作中讨论 TA-SID + LIGER 的组合。
 
 **Q5: "为什么 Sport 提升大但 Toys 提升小？"**
-A5: 数据稀疏度差异。Sport 稀疏（+17.1%）→ 内容特征不足 → 行为信号边际贡献大。Toys 稠密（+12.2%）→ 所有方法饱和 → 差距缩小。论文把这个作为"信号互补性"的论据。
+A5: **只主张"最稀疏的 Sport 增益最大"**：Sport 密度最低（0.045%）、序列最短（8.32）→ 内容特征不足 → 行为信号边际贡献最大（+17.1%）。⚠ **不要写"Toys 稠密→饱和"**：Beauty 与 Toys 密度几乎相同（0.0734% / 0.0724%），增益却差 3.7pp（+15.9% vs +12.2%），密度和序列长都解释不了；建议答道"其余两数据集增益相当且较小，其间的差异归因于数据分布差异，我们不做过度解读"。论文把这个作为"信号互补性"的论据（口径见 [paper_main_results.md §2.1](paper_main_results.md)）。
 
 **Q6: "怎么证明提升来自 Transition Dynamics，不是随便加个向量就涨？"**
 A6: 我们做了三层控制变量（§7.2，Sport，一次只改一个）：Content-only=0.0274 → +ZeroPad=0.0286（死维度，≈无变化）→ +Shuffled=0.0262（错配向量，有害）→ +Transition=0.0327（唯一正向，相对 ZeroPad +14.3%、相对 Shuffled +24.8%）。结论：维度不贡献、任意向量有害、唯有真实转移结构带来提升。
@@ -510,8 +430,9 @@ A6: 我们做了三层控制变量（§7.2，Sport，一次只改一个）：Con
 证据链：TA-SID > Content-only TIGER (+12.2%~+17.1%) > SASRec (+56.4%~+139.5%)（v2 对齐口径，3 seed 均值，零交叉）
         ↓
 验证层：① Random SID 消融（码质量） ② ZeroPad/Shuffled 消融（维度不贡献、错配有害、净贡献 +14.3%/+24.8%）
-        ③ AUC 转移一致性（量化空间） ④ 正交性（非冗余） ⑤ 长尾分析（Head 提升显著）
-        ⑥ 维度鲁棒性（768d vs 4096d）
+        ③ AUC 转移一致性（量化空间，即非冗余性的直接证据） ④ 长尾分析（Head 提升显著）
+        ⑤ 维度鲁棒性（768d vs 4096d）
+        （原"正交性分析"一项已删除：数字不可溯源且逻辑不成立，见 §7.5 裁撤说明）
         ↓
 定位层：ADC-SID（复杂自适应融合） vs TA-SID（简洁转移注入）→ 同目标不同路径
         ↓

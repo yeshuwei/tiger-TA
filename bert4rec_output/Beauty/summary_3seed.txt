@@ -1,0 +1,6 @@
+# BERT4Rec Beauty — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.014090	0.018305	0.023000	0.021509	0.034611	0.053347	(best epoch 200)

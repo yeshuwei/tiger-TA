@@ -1,0 +1,12 @@
+variant,codes_file,status,codes_L0distinct,best_ckpt,agree_L0
+Content-only,Toys_content768d_baseline_sid.npy,OK,148,Toys_Content768d_Baseline/Jul-31-2026_21-37-33/best_collisio,1.000000
+Content-only,Toys_content768d_seed2025_sid.npy,OK,169,Toys_Content768d_seed2025/Sep-04-2026_17-07-25/best_collisio,1.000000
+Content-only,Toys_content768d_seed2026_sid.npy,OK,150,Toys_Content768d_seed2026/Sep-04-2026_17-14-16/best_collisio,1.000000
+ZeroPad,Toys_zeropad_seed2024_sid.npy,OK,163,Toys_Zeropad_seed2024/Sep-04-2026_17-21-10/best_collisio,1.000000
+ZeroPad,Toys_zeropad_seed2025_sid.npy,OK,185,Toys_Zeropad_seed2025/Sep-04-2026_17-28-11/best_collisio,1.000000
+Shuffled,Toys_shuffled_768d_sid.npy,OK,243,Toys_Shuffled_768d/Sep-23-2026_08-37-17/best_collisio,1.000000
+ItemCF,Toys_itemcf_768d_sid.npy,OK,161,Toys_ItemCF_768d/Sep-23-2026_00-45-14/best_collisio,1.000000
+Raw-CoOcc,Toys_rawcooc_768d_sid.npy,OK,222,Toys_RawCoOcc_768d/Sep-22-2026_22-36-51/best_collisio,1.000000
+TA-SID(健康),Toys_ta_sid_768d_seed2024_sid.npy,OK,207,Toys_TA_SID_768d/Jul-28-2026_23-22-02/best_collisio,1.000000
+TA-SID(孤儿·作废),Toys_ta_sid_768d_sid.npy,ORPHAN,62,Toys_TA_SID_768d/Jul-28-2026_23-22-02/best_collisio,0.292603
+Random,Toys_random_sid.npy,ORPHAN,122,Toys_TA_SID_seed2025/Sep-03-2026_22-07-02/best_loss_mod,0.009896

@@ -86,6 +86,47 @@ def encode_z(model, data_path, batch_size=1024, device="cpu"):
 
 
 # ----------------------------------------------------------------------------
+# M2b. 逐层 code 的真实重放（2026-09-27 新增）—— 供 provenance 审计使用
+# ----------------------------------------------------------------------------
+@torch.no_grad()
+def rederive_codes_sequential(model, z, use_sk=False):
+    """按 RQ 的真实前向顺序重算每层 code：residual 逐层减去已选中的码本向量。
+
+    ⚠ 为什么不能对每层直接 `argmin(z, cb_l)`：
+        `ResidualVectorQuantizer.forward` 里是 `residual = residual - x_res`，
+        第 l 层的输入是**残差**而不是 z。用 z 对每一层独立 argmin，得到的 L1/L2
+        与 codes 文件里的列**不可比** —— 会报出近乎随机的 ~0.6%–2.3% 一致率
+        （`doc/e48_toys_main_codes_provenance_fix.md` 曾把该数字当真引用）。
+    ⚠ `use_sk` 的语义与**实测哪个匹配 codegen**：
+        `VectorQuantizer` 在 `sk_epsilon > 0` 时改用 Sinkhorn 做**全局**分配（非逐行
+        argmin）。主表 `args.sk_epsilons = [0.0, 0.0, 0.003]` ⇒ L0/L1 恒为纯 argmin，
+        只有 **L2** 受 `use_sk` 影响。codegen 是**两趟**：初始 pass `use_sk=False`，
+        碰撞消解循环 `use_sk=True`（见 `generate_sid_codes_param.py` docstring）。
+        2026-09-27 实测（Beauty/Sport best_collision，L0 均为 100.00%）：
+
+            use_sk=False →  L2 = 98.06% / 98.86%
+            use_sk=True  →  L2 = 86.03% / 89.52%
+
+        ⇒ **`use_sk=False` 才是与 codes 文件匹配的主 pass**（故设为默认值）；
+        L2 残留的 ~1–2% 正是被碰撞消解循环（`use_sk=True`）改写过的那些行。
+        **L0/L1 与 use_sk 无关，两者都精确 100.00%。**
+    ⚠ 结构冗余：给定同一码本与同一 z，**L0 一致率 = 100% ⟹ L1 = 100%**（残差被完全
+        决定）。故 L1/L2 **不构成独立证据**，只能当"码本同一性检查"。
+        （同一判断的先例见 `doc/e49grid_diag_summary.md` §1："L0 是 z 上的直接 argmin，
+        判据有效；L1/L2 在残差上量化，直接 argmin 无判据性"。）
+
+    Returns: (N, num_quantizers) int64 numpy array。
+    """
+    residual = z
+    out = []
+    for q in model.rq.vq_layers:
+        x_res, _, idx = q(residual, use_sk=use_sk)
+        out.append(idx.view(-1))
+        residual = residual - x_res
+    return torch.stack(out, dim=1).cpu().numpy()
+
+
+# ----------------------------------------------------------------------------
 # M3. 语义切分：在 z 上确定性 k-means 并写回 L0
 # ----------------------------------------------------------------------------
 def relock_l0(model, z, k=None, seed=2024, n_init=10, max_iter=300):

@@ -1,11 +1,17 @@
-# §4.6 ~~Adaptive Transition-Preserving Quantization~~ → 防塌缩健康量化诊断（第二创新，中文草稿）
+# §4.6 ~~Adaptive Transition-Preserving Quantization~~ 〔整节已裁撤，勿入论文〕
 
-> ⚠ **2026-09-04 推翻裁定（§4.6 全节待重写，勿按此稿翻译进论文）**：本稿的"扩容/容量自适应"方法主张已被
-> E45 推翻——Toys 的 K0 塌缩是 seed2024 单次训练的分配崩坏（换种子 256 健康，z-gap≤0.004），健康 256 的
-> T5 NDCG≈512（无统计差异）→ **扩容无稳健推荐层收益**，正确动作是 reseed。权威裁定与改写版方法见
-> [e46_second_innovation_overturn.md](e46_second_innovation_overturn.md) 及 [paper_outline_ta_sid.md §4.6](paper_outline_ta_sid.md)。
-> **状态：** 2026-08-14 稿，方法部分的历史版本。数据源：量化诊断链（E1/E2/E3）→ `doc/sid_capacity_diagnostic.md`、`e3_gate_verdict.md`；K0 sweep → `doc/e41_k0_sweep_results.md`；机制定论 → `doc/e42_adaptive_k0_results.md`；推荐层验证 → `doc/e43_adaptive_experiment.md`（Q3 已废）。
-> **与第一创新的关系（改写后）：** §4.4 解决"喂什么信号"（内容⊕转移融合进 RQ-VAE 输入），本节解决"保证量化器这次没静默塌缩"（z-gap 事后判据 + reseed 兜底）。两层正交、叠加成立。
+> **⛔ 2026-09-29 裁撤（最终）：** 本稿所描述的**第二创新点已正式裁撤**，论文为**单创新点**论文，§4 方法章节
+> **只有 §4.1–§4.5**（转移图 → PPMI+SVD → LN+Concat → RQ-VAE），**没有 §4.6**。本文件全文仅作历史存档，
+> **不得**翻译进论文、不得作为贡献、不得出现在摘要/引言贡献列表/目录/结论中。
+> **禁止保留任何"Adaptive Capacity / Adaptive Transition-Preserving Quantization / BSR / Semantic ID quality screening"
+> 作为第二贡献的表述。**
+>
+> ⚠ **2026-09-04 推翻裁定**：本稿的"扩容/容量自适应"方法主张已被 E45 推翻——Toys 的 K0 塌缩是
+> TASID×Toys×seed2024 单次训练的分配崩坏（换种子 256 健康，z-gap≤0.004），健康 256 的 T5 NDCG≈512
+> （无统计差异）→ **扩容无稳健推荐层收益**。权威裁定见
+> [e46_second_innovation_overturn.md](e46_second_innovation_overturn.md) 与
+> [e47_seed_health_isolation.md](e47_seed_health_isolation.md)。
+> **状态：** 2026-08-14 稿，已裁撤方法的历史版本。数据源（均为历史材料）：量化诊断链（E1/E2/E3）→ `doc/sid_capacity_diagnostic.md`、`e3_gate_verdict.md`；K0 sweep → `doc/e41_k0_sweep_results.md`；机制 → `doc/e42_adaptive_k0_results.md`；推荐层验证 → `doc/e43_adaptive_experiment.md`（Q3 已废）。
 
 ---
 
@@ -28,6 +34,10 @@ $$\mathrm{AUC}=\mathbb{P}\big(\cos(x_a,x_b)>\cos(x_{a'},x_{b'})\big),\quad (a,b)
 在此基础上定义**量化转移损失 z-gap**：
 $$z\text{-gap}=\mathrm{AUC}(z)-\mathrm{AUC}(x_q^{\text{full}}),$$
 即编码器输出 $z$ 空间（未量化的转移结构上限）与全量化重建 $x_q$ 空间之间的 AUC 差距。$z$-gap ≈ 0 表示量化近无损，转移结构被完整保留；$z$-gap 大表示量化丢弃了结构。**$z$-gap 是本节诊断与自适应机制的核心信号。**
+
+> ⚠ **口径注记（2026-09-29）：** 本节 AUC 使用**均匀随机负样本**，属**已废弃口径**；§7.3 与 §5.5 的现行主口径为
+> **度匹配负采样**（Beauty 0.9560 / Sport 0.9647 / Toys 0.9651）。下表数值仅在本节已裁撤的诊断语境内有意义，
+> **不得**与 §5.5 / §7.3 主表并列引用。
 
 **三数据集画像（$K_0=256$）。**
 

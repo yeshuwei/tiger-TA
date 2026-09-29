@@ -1,0 +1,11 @@
+# BERT4Rec Sport — 3-seed aligned test metrics
+# 协议: val=valid.parquet, test=test.parquet (对齐 TA-SID T5)
+# 全量用户, 全量物品排序, best-val NDCG@20 checkpoint
+
+seed	NDCG@5	NDCG@10	NDCG@20	Rec@5	Rec@10	Rec@20
+2025	0.007346	0.009993	0.012878	0.011518	0.019720	0.031210	(best epoch 60)
+2026	0.006815	0.008636	0.011309	0.010731	0.016462	0.027193	(best epoch 60)
+2027	0.006577	0.008775	0.011204	0.010394	0.017248	0.026912	(best epoch 60)
+
+mean	0.006913	0.009135	0.011797	0.010881	0.017810	0.028438
+std	0.000321	0.000610	0.000766	0.000471	0.001388	0.001963

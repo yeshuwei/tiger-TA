@@ -1,7 +1,7 @@
 ```
 ====================================================================================================
 Beauty 补齐变体 — 量化前（fused 896d）行为结构 pre-flight 诊断
-运行时间: 2026-09-23 23:24:38
+运行时间: 2026-09-27 22:48:08
 ⚠ 本表是量化前口径，绝对 AUC 与主表（xq[full]）不可比，勿混引
 E 图: train.parquet history+[target] → 滑窗 window=3（±1 相邻对）
 ====================================================================================================
@@ -18,7 +18,7 @@ E 图: 12101 items | 111649 条边 (count 2–142) | 22363 条训练序列
   ✅ Shuffled       fused_item_emb_shuffled.parquet    dim=896
   ✅ ItemCF         fused_item_emb_itemcf.parquet      dim=896
   ✅ Raw-CoOcc      fused_item_emb_rawcooc.parquet     dim=896
-  ✅ TA-SID         fused_item_emb.parquet             dim=896
+  ✅ TA-SID         fused_item_emb_768d.parquet        dim=896
 
 → CSV: doc/beauty_preflight_results.csv  (24 行)
 
