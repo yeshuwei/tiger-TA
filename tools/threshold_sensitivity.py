@@ -35,6 +35,7 @@ from sid_consistency_contrast import (
     CONFIG,
     find_best_ckpt,
     load_codebook_weights,
+    pairs_to_rows,
     pair_sims,
     random_pair_sims,
     compute_auc,
@@ -88,7 +89,7 @@ def sensitivity(ds_name, pairs, z, xq_full, tag):
     print(f'  {"count>=":7s} {"池大小":>6s} {"实际用":>6s} {"min共现":>7s} | {"z AUC":>7s} {"xq AUC":>7s} {"z-gap":>7s}')
     for T in THRESH:
         sel = [(p, c) for p, c in pairs if c >= T][:1000]
-        pair_ab = [(a - 1, b - 1) for (a, b), c in sel]
+        pair_ab = pairs_to_rows(ds_name, sel)
         if len(pair_ab) < 50:
             print(f'  count>={T:2d} 池不足 50 对，跳过')
             continue

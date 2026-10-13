@@ -132,6 +132,31 @@ def top_transition_pairs(ds_name, top_k=1000, min_count=2):
     return top
 
 
+def item_id_to_row(ds_name, item_emb_file="item_emb_768d.parquet"):
+    """ItemID → codes / embedding 矩阵的 canonical 行号（0-based）。
+
+    ⚠ 禁止用 `ItemID - 1` 代替本函数。ItemID 虽是 1-based（prepare_data.py /
+    generate_content_embeddings.py 生成），但**不保证等于行号 + 1**：
+      Beauty 的 ItemID 是 1..N 的一个排列，4158/12101 = 34.36% 的行错位。
+      用 `a - 1` 会静默取到**另一个商品**的码 —— 实测 Beauty TA-SID xq[full]
+      AUC 0.8687（错）vs 0.9495（对），1000 对里只有 308 对映射正确。
+      Sport / Toys 的 ItemID 恰好连续，两法逐位等价，故该 bug 长期未被发现。
+    """
+    item_emb_path = os.path.join(DATA_DIR, ds_name, item_emb_file)
+    ids = pd.read_parquet(item_emb_path)["ItemID"].values
+    return {int(iid): idx for idx, iid in enumerate(ids)}
+
+
+def pairs_to_rows(ds_name, pairs, item_emb_file="item_emb_768d.parquet"):
+    """[((ItemID_a, ItemID_b), count), ...] → [(row_a, row_b), ...]。
+
+    所有下游诊断脚本统一的 ItemID → 行号入口；不要各自写
+    `[(a - 1, b - 1) for (a, b), c in pairs]`。
+    """
+    m = item_id_to_row(ds_name, item_emb_file)
+    return [(m[a], m[b]) for (a, b), _ in pairs]
+
+
 def quantized_space(codes, codebooks):
     """重建量化向量并归一化。返回 (N, e_dim) 归一化张量。"""
     xq = rebuild_xq(codes, codebooks)  # (N, e_dim)
@@ -195,7 +220,7 @@ def main():
         if not pairs:
             print(f"{ds}: 无转移对")
             continue
-        pair_ab = [(a - 1, b - 1) for (a, b), c in pairs]
+        pair_ab = pairs_to_rows(ds, pairs)
 
         print(f"\n{'─'*88}")
         print(f"📊 {ds}   |   top-{len(pairs)} 高频转移对, {args.n_random} 随机对")

@@ -155,8 +155,12 @@ def paired_t(diff):
         from scipy import stats
         p = 2 * (1 - stats.t.cdf(abs(t), df))
     except ImportError:
-        # df=2 解析式：P(|T|>t) = 1 - t/sqrt(3+t^2)
-        p = 1 - abs(t) / math.sqrt(3 + t * t)
+        # df=2 解析式：P(|T|>t) = 1 - t/sqrt(2+t^2)
+        # ⚠️ 2026-10-07 修正：原写 sqrt(3+t^2) 为笔误（会系统性放大 p，偏保守）。
+        # 已用 scipy 1.11.4 逐点校验：t=4.3027 时 2+t² 形式给 0.049999（=临界值），
+        # 3+t² 形式给 0.072341（错误）。scipy 在装时本行不触发，故历史数字未受影响。
+        # 仅 df=2 有闭式；其余 df 无 scipy 时返回 nan（不猜）。
+        p = 1 - abs(t) / math.sqrt(2 + t * t) if df == 2 else float("nan")
     return float(t), float(p), df
 
 

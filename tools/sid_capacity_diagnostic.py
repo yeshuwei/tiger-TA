@@ -45,6 +45,7 @@ from sid_consistency_contrast import (
     find_best_ckpt,
     load_codebook_weights,
     top_transition_pairs,
+    pairs_to_rows,
     pair_sims,
     random_pair_sims,
     compute_auc,
@@ -146,7 +147,7 @@ def main():
         if not pairs:
             log(f"{ds}: 无转移对，跳过")
             continue
-        pair_ab = [(a - 1, b - 1) for (a, b), c in pairs]
+        pair_ab = pairs_to_rows(ds, pairs)
 
         ckpt = find_best_ckpt(cfg["ta_ckpt"])
         if ckpt is None:

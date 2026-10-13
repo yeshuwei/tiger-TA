@@ -16,7 +16,7 @@ TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TOOLS_DIR)
 sys.path.insert(0, os.path.join(TOOLS_DIR, "..", "rqvae"))
 
-from sid_consistency_contrast import CONFIG, find_best_ckpt, top_transition_pairs, pair_sims, random_pair_sims, compute_auc
+from sid_consistency_contrast import CONFIG, find_best_ckpt, top_transition_pairs, pairs_to_rows, pair_sims, random_pair_sims, compute_auc
 from sid_per_layer_diagnostic import encode_z, normalize_rows
 
 KS = [64, 128, 192, 256, 320, 384, 512, 768, 1024]
@@ -44,7 +44,7 @@ def main():
         if ckpt is None:
             print(f"{ds}: NO CKPT, skip"); continue
         pairs = top_transition_pairs(ds, top_k=1000)
-        pair_ab = [(a - 1, b - 1) for (a, b), c in pairs]
+        pair_ab = pairs_to_rows(ds, pairs)
 
         import torch as _t
         data_path = _t.load(ckpt, map_location="cpu", weights_only=False)["args"].data_path
