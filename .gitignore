@@ -215,3 +215,8 @@ backup_old_sport/
 research/_p11_cache/
 research/_p12_cache/
 research/audit_structquant/
+
+# Clean TIGER runtime artifacts (checkpoints, logs, smoke-test data)
+clean_tiger/ckpt/
+clean_tiger/logs/
+clean_tiger/_smoke/

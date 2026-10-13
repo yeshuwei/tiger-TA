@@ -1,3 +1,4 @@
+import argparse
 import collections
 import json
 import logging
@@ -43,11 +44,38 @@ def get_collision_item(all_indices_str):
 
 # Attention: Remember to change the dataset name and checkpoint path
 # if you want to generate codes for other datasets.
-DATASET = "Toys"   # Change to "Beauty" or "Sports" for other datasets
+DATASET = "Toys"   # legacy default; override with --dataset
 dataset = DATASET
-ckpt_path = f"./ckpt/{DATASET}/Jul-07-2026_21-10-06/best_collision_model.pth"
-output_file = f"../data/{DATASET}/{DATASET}_t5_rqvae.npy"
-device = torch.device("cuda:0")
+
+
+# ---------------------------------------------------------------------------
+# Minimal CLI addition (frozen Clean TIGER baseline).
+# The original TIGER script had the checkpoint / output paths hardcoded, which
+# made it impossible to drive from a pipeline without editing this file.
+# Every default below reproduces the original behaviour exactly, so running
+# this script with no arguments still does what it did before.
+# ---------------------------------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate item -> Semantic ID codes from a trained RQ-VAE."
+    )
+    parser.add_argument('--dataset', type=str, default=DATASET,
+                        help='Dataset name (legacy default: %(default)s)')
+    parser.add_argument('--ckpt_path', type=str, default=None,
+                        help='RQ-VAE checkpoint. Default: the legacy hardcoded '
+                             'path for --dataset (Toys only).')
+    parser.add_argument('--output_file', type=str, default=None,
+                        help='Output .npy. Default: ../data/{dataset}/{dataset}_t5_rqvae.npy')
+    parser.add_argument('--device', type=str, default='cuda:0')
+    return parser.parse_args()
+
+
+_cli = parse_args()
+DATASET = _cli.dataset
+dataset = DATASET
+ckpt_path = _cli.ckpt_path or f"./ckpt/{DATASET}/Jul-07-2026_21-10-06/best_collision_model.pth"
+output_file = _cli.output_file or f"../data/{DATASET}/{DATASET}_t5_rqvae.npy"
+device = torch.device(_cli.device)
 
 ckpt = torch.load(ckpt_path, map_location=torch.device('cpu'), weights_only=False)
 args = ckpt["args"]
