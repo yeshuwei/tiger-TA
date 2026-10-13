@@ -210,3 +210,8 @@ backup_old_sport/
 # Claude AI working files (not project code)
 .claude/
 .memory
+
+# Research intermediates (large, regenerable) and third-party paper full texts
+research/_p11_cache/
+research/_p12_cache/
+research/audit_structquant/
