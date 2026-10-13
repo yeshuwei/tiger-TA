@@ -1,0 +1,10 @@
+dataset	seed	rqvae_ckpt	L0_unique	b4_L0	gate	val_ndcg20	test_ndcg5	test_ndcg10	test_ndcg20	eval_log
+Sport	2025	Sep-30-2026_01-22-47	250	151	PASS	0.036009223645959661	0.0183	0.0242	0.0311	model/logs/Sport_b2align0.02_seed2025_eval.log
+Sport	2026	Sep-30-2026_01-22-47	250	151	PASS	0.036549957716998184	0.0187	0.0247	0.0314	model/logs/Sport_b2align0.02_seed2026_eval.log
+Sport	2027	Sep-30-2026_01-22-47	250	151	PASS	0.036319310682752945	0.0187	0.0246	0.0313	model/logs/Sport_b2align0.02_seed2027_eval.log
+Toys	2025	Sep-30-2026_10-35-50	256	148	PASS	0.04729440030664793	0.0225	0.0296	0.0376	model/logs/Toys_b2align0.02_seed2025_eval.log
+Toys	2026	Sep-30-2026_10-35-50	256	148	PASS	0.046737407164400432	0.0237	0.0310	0.0392	model/logs/Toys_b2align0.02_seed2026_eval.log
+Toys	2027	Sep-30-2026_10-35-50	256	148	PASS	0.045155304263855139	0.0223	0.0299	0.0378	model/logs/Toys_b2align0.02_seed2027_eval.log
+Beauty	2025	Sep-30-2026_13-03-42	256	83	PASS	0.056788794139735879	0.0253	0.0323	0.0408	model/logs/Beauty_b2align0.02_seed2025_eval.log
+Beauty	2026	Sep-30-2026_13-03-42	256	83	PASS	0.056290603130895948	0.0241	0.0312	0.0392	model/logs/Beauty_b2align0.02_seed2026_eval.log
+Beauty	2027	Sep-30-2026_13-03-42	256	83	PASS	0.056381210832668734	0.0249	0.0316	0.0401	model/logs/Beauty_b2align0.02_seed2027_eval.log

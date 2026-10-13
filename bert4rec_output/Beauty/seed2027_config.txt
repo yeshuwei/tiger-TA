@@ -1,0 +1,2 @@
+# git HEAD: 4964ebff5e19a143685f201dd6e565af0b98a8f6
+# argv: tools/run_bert4rec.py --dataset Beauty --seeds 2027 --output_dir bert4rec_output
