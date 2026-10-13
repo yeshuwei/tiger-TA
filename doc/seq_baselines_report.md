@@ -134,8 +134,9 @@ GRU4Rec/BERT4Rec 用 Adam 默认 betas —— 同为其各自论文口径，属�
 | `doc/paper_main_results.md` §1/§3、`doc/experiment_results_summary.md` §1.5 | 0 |
 | `doc/ablation_main_table_3datasets.md`、图 A | **1** |
 
-逐格反算确认 **18/18 格四位小数即不同**。已统一为 **ddof=1**（Bessel 校正；与消融表、
-图 A 一致；也是领域惯例）。**均值与逐 seed 值全部未变，仅 std 变化。**
+逐格反算确认：加入新基线后共 30 格，**29/30 格在四位小数下即不同**
+（三方法时曾为 18/18；唯一巧合相同的一格不改变任何结论）。已统一为 **ddof=1**（Bessel 校正；
+与消融表、图 A 一致；也是领域惯例）。**均值与逐 seed 值全部未变，仅 std 变化。**
 论文 §5.1 需加一句 "standard deviation uses Bessel's correction (n−1)"。
 
 逐 seed 产物文件保持 ddof=0 不动（历史一致性），差异记录在
@@ -164,8 +165,81 @@ same order as between-seed variation。可复现性声明限定为"**给定 chec
 
 ## 5. 结果
 
-> ⏳ 待全量跑完填入。产物：`gru4rec_output/{Sport,Toys,Beauty}/summary_3seed.txt`、
-> `bert4rec_output/{...}/summary_3seed.txt`。
+**完成时间**：2026-09-29 23:37:01（driver 全程 3 h 24 min，exit 0，无 NaN）。
+**产物**：`gru4rec_output/{Sport,Toys,Beauty}/summary_3seed.txt`、`bert4rec_output/{...}/summary_3seed.txt`。
+
+### 5.1 主表（3-seed mean，best-val NDCG@20 checkpoint，对齐协议）
+
+| 数据集 | 指标 | SASRec | GRU4Rec | BERT4Rec | Content-only | **TA-SID** |
+|:--|:--|--:|--:|--:|--:|--:|
+| **Sport** | NDCG@20 | 0.0134±0.0003 | 0.0129±0.0003 | 0.0118±0.0008 | 0.0275±0.0007 | **0.0322**±0.0005 |
+| | Recall@20 | 0.0374±0.0017 | 0.0282±0.0003 | 0.0284±0.0020 | 0.0666±0.0019 | **0.0769**±0.0014 |
+| **Beauty** | NDCG@20 | 0.0254±0.0009 | **0.0323**±0.0011 ⚠ | 0.0233±0.0005 | 0.0358±0.0009 | **0.0415**±0.0011 |
+| | Recall@20 | 0.0711±0.0019 | 0.0612±0.0014 | 0.0539±0.0006 | 0.0811±0.0010 | **0.0941**±0.0019 |
+| **Toys** | NDCG@20 | 0.0241±0.0004 | 0.0192±0.0002 | 0.0132±0.0008 | 0.0336±0.0007 | **0.0377**±0.0007 |
+| | Recall@20 | 0.0651±0.0019 | 0.0394±0.0009 | 0.0313±0.0014 | 0.0785±0.0009 | **0.0911**±0.0020 |
+
+（SASRec / Content-only / TA-SID 三行复制自 `paper_main_results.md` §1，**未改动**；std 已统一 ddof=1。）
+
+> **⚠ 标记的含义（仅此一处，勿误读）**：⚠ **不是数据质量警告，是"经典基线越界"标记** ——
+> 指该格中某个经典序列基线**超过了 SASRec**，触发预登记的 R3 结局 B，需删改论文表述。
+> 本次只有 Beauty / GRU4Rec / NDCG@20 一格越界。该格数字本身可信：
+> 3 seed 齐备、std=0.0011 正常、`TA-SID − GRU4Rec` 配对检验三 seed 零越界（d_z=3.75）。
+> 且越界**只在 NDCG 上成立**（同格 Recall@20 为 SASRec 0.0711 > GRU4Rec 0.0612）。
+
+### 5.2 判定：结局 A（Sport/Toys）+ 结局 B（Beauty）
+
+按预登记 R3：
+
+- **Sport / Toys** = **结局 A**：`BERT4Rec < GRU4Rec < SASRec < Content-only < TA-SID`，两指标均如此。
+- **Beauty** = **结局 B**：NDCG@20 上 **GRU4Rec (0.0323) 超过 SASRec (0.0254)**，
+  但仍低于 Content-only (0.0358) 与 TA-SID (0.0415)。
+  ⇒ **主叙事不变**（TA-SID 在所有 3 数据集、所有 3 seed、两个指标上始终最高），
+  但**必须删除论文中"SASRec 是最强经典基线"一类表述**。
+
+**Recall@20 上 SASRec 仍是三数据集的最强经典基线**（Beauty 0.0711 > GRU4Rec 0.0612）。
+即 "最强经典基线" 的归属**取决于指标**，论文不应做无条件断言。
+
+### 5.3 一处需如实报告的口径分裂：GRU4Rec 排序更"头部集中"
+
+Beauty 上 GRU4Rec 在三个 NDCG 指标全面胜 SASRec（N@5 为 2.0×：0.0244 vs 0.0121），
+**但 Recall@20 反而更低**（0.0612 vs 0.0711）。Sport/Toys 则相反 —— 差距最大处是 Recall@20
+（Toys 0.0394 vs 0.0651）。
+
+机制：NDCG 按位次折损、Recall 只数命中集合；GRU4Rec 的 softmax CE 会把概率质量压在
+少数头部物品上（全物品 softmax 天然倾向锐化），故头部命中率受益、长尾召回受损。
+**这是损失函数与指标交互的结果，不是实现缺陷**（自检 T2/T3 已验证 CE 与掩码正确、
+冒烟 val/test 同向、三 seed 零越界）。
+
+论文写法建议：不要写 "GRU4Rec is stronger/weaker than SASRec"，而写
+"the relative ordering of the classic baselines depends on the metric"。
+
+### 5.4 配对显著性检验（n=3, df=2）
+
+完整表见 [seq_baselines_significance.md](seq_baselines_significance.md)。关键结论：
+
+- **18/18 组对比零 seed 越界**（TA-SID 在每一个对比的每一个 seed 上都胜出）。
+- 效应量 `d_z` 范围 **2.07 – 42.82**；其中 TA-SID − SASRec 为 8.15 – 42.82。
+- **唯一 `p > 0.05` 的对比**：Beauty `Content-only − GRU4Rec` Δ=+0.0035，
+  t=3.59，**p=0.070**，d_z=2.07 —— 即 §5.2 那一格越界。**不得**在此格声称显著。
+
+> **n=3 措辞红线**（沿用既有）：即使无分布假设的符号检验，n=3 的最小双侧 p 也是 **0.25**。
+> 稳健性主张须基于"三 seed 零越界 + 效应量"，**不得**写 "statistically significant (p<0.05)"。
+
+### 5.5 验收清单结果
+
+| 项 | 结果 |
+|:--|:--|
+| 无 NaN | ✅ |
+| best epoch 三 seed 非全同 | ⚠ 2/6 组全同（GRU4Rec Sport 40/40/40、BERT4Rec Sport 60/60/60）—— **已查实非缺陷**，见下 |
+| 三 seed 零越界 | ✅ 18/18 |
+| 训练/评估契约一致 | ✅ 三方法共用 `evaluate_full` |
+
+**"best epoch 全同"的查实结论**：两组的 val 曲线都是**真实峰值** ——
+GRU4Rec Sport 三 seed 均为 ep40 局部最大、ep60 起单调下滑（0.014927→0.014564→…）；
+BERT4Rec Sport 三 seed 均为 ep60 为峰（ep80 已持平或下降）。
+因 `eval_interval=20`、峰值区宽度不足一个评估间隔，三 seed 落在同一格是预期结果，
+**best-val 选择与早停逻辑无异常**。其余 4 组 best epoch 各异（如 GRU4Rec Toys 100/120/160）。
 
 ---
 

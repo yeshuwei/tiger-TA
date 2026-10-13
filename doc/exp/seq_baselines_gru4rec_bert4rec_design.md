@@ -20,7 +20,9 @@
 | `tools/paired_significance.py` + 报告 | ✅ 完成（6/6 对比零越界） |
 | 阶段 5 步 1：CPU 自检 | ✅ GRU4Rec 11/11、BERT4Rec 15/15 |
 | 阶段 5 步 2：冒烟（Toys/seed2025/20ep） | ✅ 双通过（见 §0.1） |
-| 三基线 3-seed 全量训练 | ⏳ 运行中（driver task `bfb8152m5`） |
+| 三基线 3-seed 全量训练 | ✅ **完成**（2026-09-29 23:37:01，3 h 24 min，exit 0，无 NaN） |
+| 阶段 5 步 4/5：验收 + 配对检验 | ✅ 18/18 零越界；结果见 [seq_baselines_report.md §5](../seq_baselines_report.md) |
+| **R3 判定** | **Sport/Toys = 结局 A；Beauty = 结局 B**（GRU4Rec N@20 超 SASRec 但仍 < Content-only） |
 
 ### 0.1 阶段 5 步 1–2 实测
 
@@ -234,7 +236,10 @@ python3 tools/run_sasrec.py --dataset Sport --seeds 2025 \
 | `doc/ablation_main_table_3datasets.md` | **1**（样本标准差） |
 | 图 A（`figA_claims_verification.md`） | **1** |
 
-逐格反算确认（`doc/seq_baselines_significance.md §1`）：**18/18 格四位小数即不同**。
+逐格反算确认（`doc/seq_baselines_significance.md §1`）：加入新基线后共 30 格，
+**29/30 格在四位小数下即不同**（唯一巧合相同的一格不改变任何结论）。
+> 注：本项在只有 SASRec/Content-only/TA-SID 三方法时为 **18/18 全不同**；
+> 30 格是补入 GRU4Rec/BERT4Rec 后的完整计数。
 
 ### 3.2 处置
 

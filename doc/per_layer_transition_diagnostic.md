@@ -1,5 +1,31 @@
 # Per-layer 转移结构保留诊断
 
+> **⚠️ 修订记录（2026-10-13）：本文 Beauty 段的数值由错误的索引映射产生，勿引用。**
+>
+> **成因**：本报告由 `tools/sid_per_layer_diagnostic.py` 生成，其 `pair_ab` 用
+> `[(a - 1, b - 1) for (a, b), c in pairs]` 从 ItemID 取矩阵行号。该写法隐含假设
+> **`ItemID == 行号 + 1`** —— 此假设**只在 Sport / Toys 成立**：
+> `data/Beauty/item_emb_768d.parquet` 的 ItemID 是 1..12101 的一个**排列**，
+> 4158/12101 = **34.36% 的行错位**（例：row 8 存的是 ItemID 10）。
+> 于是 Beauty 的每一对都被映射到**另一个商品**上（1000 对里仅 308 对正确）。
+>
+> **实测影响**（Beauty TA-SID，同一脚本口径重算）：`input` 0.9050→**0.9954**、
+> `z` 0.8688→**0.9575**、`xq[L0]` 0.8485→**0.9225**、`xq[L0+L1]` 0.8675→**0.9454**、
+> `xq[full]` 0.8687→**0.9495**。**三条结论标签均不翻转**（input→full 仍为"小幅度变化"、
+> z→full 仍为"量化环节无丢失"、分层仍为"粗层部分保留，细层补充"），仅数值整体上移 ~0.07–0.09。
+> 本文 Beauty 段的 Content-only 行同样受影响，但未重算。**Sport / Toys 两段的数值不受影响**
+> （两数据集 ItemID 恰好连续，两法逐位等价，实测 Δ < 3e-5）。
+>
+> **附注**：脚本内的 `KNOWN_AUC` 自检锚点（Beauty TA-SID 0.869）也是按同一错值写死的，
+> 故当时自检报"✓ sanity OK" —— 属自洽地错，不能作为该数正确的证据。
+>
+> **处置（2026-10-13）**：5 处 `a-1` 写法已全部改为显式 `pairs_to_rows()` 映射
+> （`sid_consistency_contrast.py` / `sid_per_layer_diagnostic.py` / `sid_capacity_diagnostic.py`
+> / `intrinsic_capacity.py` / `threshold_sensitivity.py`）。**本文不重跑**：本报告属已被
+> E46/E47 推翻的"第二创新"线，无任何论文主张依赖它。正确口径的 Beauty 数字见
+> [behavior_structure_probe_results.csv](behavior_structure_probe_results.csv)
+> （TA-SID `xq[full]`/topk = 0.9560，其路径本就用显式 `id2row` 映射，未受影响）。
+
 ```text
 ====================================================================================================
 Per-layer 转移结构保留诊断（transition-structure preservation across RQ-VAE layers）
