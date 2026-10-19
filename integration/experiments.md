@@ -1413,3 +1413,9 @@ python -m tiger_ext.fixed_train \
 **规则影响**：test 口径下 CSG 仅 `lc1e-4` 满足 Δ ≥ −0.001 ⇒ λc=1e-4；ETE 无合格臂 ⇒ λe 回退 0.1 并记「未找到正向工作点」。valid 口径下合格集 {lc1e-4, lc1e-3, le0.1}，但 lc1e-3 的 L0 distinct 80% 触发塌缩判据 ⇒ 排除后同样落在 λc=1e-4 / λe=0.1。**「合格」≠「提升」。**
 
 **未确认**：基线启动时是否外部定种、ckpt 重命名无哈希证据、eval 日志不记 `--code_path`、EXP-L0 每臂仅 1 seed。
+
+### 17.6o 代码发布记录（2026-10-19，**DONE**）
+
+集成代码已发布到 GitHub `yeshuwei/tiger-TA` 的独立分支 `integration-review-20261019`，提交 `7a578bac…`（"Publish integrated CSG and ETE implementation for review"），父提交 = Clean TIGER 基线 `5edfca08…`。`main` 与 `experiments-2026-09-25` 未被改动或强推。
+
+上传 = 4 个既有文件的可选钩子（`model/main.py`、`rqvae/models/rq.py`、`rqvae/models/vq.py`、`rqvae/trainer.py`）+ `tiger_ext/` 17 个源文件 + `integration/` 29 个 harness 与 3 份文档 + `integration/README.md` + `doc/exp_l0_baseline_metric_audit.md` + `.gitignore` 三条新规则。排除 `data/`、权重、SID/embedding、`integration/artifacts/`（678 MB）与缓存/日志。详见 [plan.md §19.11.20](plan.md)。

@@ -2739,3 +2739,19 @@ finally:
 **未确认清单**：① 基线启动脚本是否在外部设置过全局随机状态（`main.py` 自身没有）；② `..._toys.pth → ..._toys_seed2025.pth` 只有 mtime + 命名约定，无哈希记录；③ eval 日志不记录 `--code_path`（SID 归属由训练日志 config + 复现结果反推）；④ 多 seed 与配对显著性：EXP-L0 每臂仅 seed 2025 一次。
 
 **对后续分析的含义**：CSG/ETE 的机制确实生效（码本/SID 变化、adapter 进入前向），但**效果层面没有可声称的增益**。若要写「各解决什么问题」，需要同 seed、同初始化口径的对照臂（当前**无 λ=0 的 fixed_train 臂**），不能直接对历史基线。
+
+#### 19.11.20 代码发布到 GitHub（2026-10-19，**DONE**）
+
+**任务边界**：只整理 Git 版本并上传，**未修改算法实现、未运行实验、未启动 EXP-B1**；未删除或清理服务器上的任何文件与实验产物。
+
+**仓库**：`origin` = `git@github.com:yeshuwei/tiger-TA.git`（与预期 `yeshuwei/tiger-TA` 一致）；另有 `gitee` 远程，未使用。
+**分支**：`integration-review-20261019`，基于 `experiments-2026-09-25` 的 HEAD（= Clean TIGER 基线 `5edfca08…`）创建；`main` 与 `experiments-2026-09-25` 均未改动（远程仍为 `bc0e9ee5…`）。
+**提交**：`7a578bac…` "Publish integrated CSG and ETE implementation for review"。
+
+**提交内容**（56 文件 / +32,596 −13）：
+- 修改 4 个：`model/main.py`（可选 `return_hidden` 与 `train(..., sia, psa)`）、`rqvae/models/rq.py`、`rqvae/models/vq.py`（可选 code logits）、`rqvae/trainer.py`（可选 `csg` hook）；默认路径逐位不变。
+- 新增：`tiger_ext/` 17 个 .py、`integration/` 29 个 harness + 3 份文档 + `README.md`、`doc/exp_l0_baseline_metric_audit.md`、`.gitignore` 规则。
+
+**排除**：`data/`、`*.pth` / `*.npy` / `*.pt` / `*.parquet` / `*.pkl`、`integration/artifacts/`（678 MB 运行产物）、`__pycache__/`、`*.log`。新增 `.gitignore` 规则 `integration/artifacts/`、`*.pt`、`*.parquet`、`*.pkl`（此前未被覆盖）。
+**审查**：`git diff --cached --check` 0 项；无密钥/token/私钥命中；无 >10 MB 新文件；无符号链接；无二进制；分支相对 `origin/main` 的 delta 不含任何权重或数据文件。历史已跟踪的 3 个 `model/ckpt/*.pth`（18 MB）在基线中即存在且与 `origin/main` 逐 blob 相同，本次未新增。
+**遗留提示**：仓库根 `requirements.txt` 是早期 TIGER 快照（Python 3.7 / torch 1.8/1.10），与集成实验实际环境（Python 3.10.12 / torch 2.6.0+cu124）不符；实际依赖记录在 `integration/README.md`，未改历史文件。`integration/plan.md` 与 `experiments.md` 各含少量本地绝对路径（provenance 记录），未含凭据。
