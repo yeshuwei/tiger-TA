@@ -56,23 +56,36 @@ class TIGER(nn.Module):
           f'#Total trainable parameters: {total_params}\n'
       )
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None):
+    def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None, return_hidden: bool = False):
       """Forward pass of the model. Returns the output logits and the loss value.
 
       Args:
           batch (dict): A dictionary containing the input data for the model.
+          return_hidden (bool): When True, additionally return the T5 encoder
+              hidden and the last decoder hidden layer. Defaults to False, in
+              which case the return value is exactly ``(loss, logits)``, i.e.
+              unchanged from the original TIGER forward.
 
       Returns:
           outputs (ModelOutput):
               The output of the model, which includes:
               - loss (torch.Tensor)
               - logits (torch.Tensor)
+              and, only when ``return_hidden=True``:
+              - encoder_hidden (torch.Tensor), shape (B, L_enc, d_model)
+              - decoder_hidden (torch.Tensor), shape (B, L_dec, d_model)
       """
       outputs = self.model(
           input_ids=input_ids,
           attention_mask=attention_mask,
-          labels=labels
+          labels=labels,
+          output_hidden_states=return_hidden
       )
+      if return_hidden:
+          return (outputs.loss,
+                  outputs.logits,
+                  outputs.encoder_last_hidden_state,
+                  outputs.decoder_hidden_states[-1])
       return outputs.loss, outputs.logits
     
     def generate(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None,  num_beams: int = 20, **kwargs):
@@ -134,21 +147,41 @@ def ndcg_at_k(pos_index, k):
   dcg = torch.where(pos_index, dcg, torch.tensor(0.0, dtype=torch.float, device=dcg.device))
   return dcg[:, :k].sum(dim=1).cpu().float()
 
-def train(model, train_loader, optimizer, device):
+def train(model, train_loader, optimizer, device, sia=None, psa=None):
+    """Recommender (T5) training loop.
+
+    Args:
+        sia: optional SIA mount (see ``tiger_ext.sia_loss.SIAMount``).
+        psa: optional PSA mount (see ``tiger_ext.psa_loss.PSAMount``).
+            Both are left at None by default, or may carry weight 0; in either
+            case the loop below is exactly Clean TIGER's and neither extra path
+            is entered.
+    """
     model.train()
     total_loss = 0.0
+    use_sia = sia is not None and sia.enabled
+    use_psa = psa is not None and psa.enabled
     for batch in tqdm(train_loader, desc="Training"):
         input_ids = batch['history'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['target'].to(device)
 
         optimizer.zero_grad()
-        loss, _ = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        if not use_sia and not use_psa:
+            loss, _ = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        else:
+            loss, _, encoder_hidden, decoder_hidden = model(
+                input_ids=input_ids, attention_mask=attention_mask,
+                labels=labels, return_hidden=True)
+            if use_sia:
+                loss = loss + sia(encoder_hidden, attention_mask, labels)
+            if use_psa:
+                loss = loss + psa(decoder_hidden, labels)
         loss.backward()
         optimizer.step()
 
         total_loss += loss.item()
-        
+
     return total_loss / len(train_loader)
 
 def evaluate(model, eval_loader, topk_list, beam_size, device):

@@ -19,7 +19,7 @@ import heapq
 
 class Trainer(object):
 
-    def __init__(self, args, model, data_num):
+    def __init__(self, args, model, data_num, csg=None):
         self.args = args
         self.model = model
         self.logger = logging.getLogger()
@@ -115,6 +115,15 @@ class Trainer(object):
                 )
                 self.logger.warning("Disabling L_trans")
                 self.lambda_trans = 0.0
+
+        # ---- C5: the Q-space constraint (lambda_csg, default 0) -------------
+        # A parameter-free hook built by ``tiger_ext/qspace_train.py`` that holds
+        # C3's constraint and C4's objective and returns ``lambda_csg * L_csg``.
+        # ``csg is None`` -- the default, and what every existing caller passes --
+        # means every expression added for it below evaluates exactly as before
+        # and no extra tensor is created or read, so the historical behaviour is
+        # bitwise unchanged.
+        self.csg = csg
 
     def _build_optimizer(self):
         params = self.model.parameters()
@@ -288,9 +297,11 @@ class Trainer(object):
         total_trans_loss = 0.0
         total_balance_loss = 0.0
         total_align_loss = 0.0
+        total_csg = 0.0
 
         is_track_b = (self.lambda_trans > 0 or self.lambda_balance > 0
-                      or self.align_weight > 0)
+                      or self.align_weight > 0
+                      or (self.csg is not None and self.csg.enabled))
 
         iter_data = tqdm(
             train_data,
@@ -312,9 +323,10 @@ class Trainer(object):
 
             # Forward: get reconstruction + latent z (if Track B)
             if is_track_b:
-                if self.align_weight > 0:
-                    # b2 额外取 x_q —— 必须是模型内部那条 straight-through 的
-                    # 张量，而非外部重新 gather（否则梯度到不了 encoder）
+                if self.align_weight > 0 or (self.csg is not None and self.csg.enabled):
+                    # b2 / C5 额外取 x_q —— 必须是模型内部那条 straight-through 的
+                    # 张量，而非外部重新 gather（否则梯度到不了 encoder）；
+                    # CSG 还要 z，用于 Q-space provenance 校验（x_q != z）
                     out, rq_loss, vq_indices, z, x_q = self.model(
                         data, return_z=True, return_xq=True)
                 else:
@@ -351,6 +363,15 @@ class Trainer(object):
                 if loss_align.requires_grad and torch.isfinite(loss_align):
                     loss = loss + self.align_weight * loss_align
 
+            # L_csg (C5) -- the hook already returns lambda_csg * L_csg, exactly
+            # like SIAMount, so the weight is applied once, inside the hook.
+            loss_csg = torch.tensor(0.0, device=self.device)
+            if self.csg is not None and self.csg.enabled and batch_indices is not None:
+                loss_csg = self.csg(x_q=x_q, indices=vq_indices, latent=z,
+                                    rows=batch_indices, rqvae=self.model)
+                if loss_csg.requires_grad and torch.isfinite(loss_csg):
+                    loss = loss + loss_csg
+
             self._check_nan(loss)
             loss.backward()
             clip_params = self.model.parameters()
@@ -366,6 +387,7 @@ class Trainer(object):
                 total_trans_loss += loss_trans.item() if torch.is_tensor(loss_trans) else 0.0
                 total_balance_loss += loss_balance.item() if torch.is_tensor(loss_balance) else 0.0
                 total_align_loss += loss_align.item() if torch.is_tensor(loss_align) else 0.0
+                total_csg += loss_csg.item() if torch.is_tensor(loss_csg) else 0.0
 
         # Log extra losses
         if is_track_b:
@@ -377,6 +399,13 @@ class Trainer(object):
                     f"L_balance={total_balance_loss/n:.4f}, "
                     f"L_align={total_align_loss/n:.4f}"
                 )
+
+        if self.csg is not None and self.csg.enabled:
+            n = len(iter_data)
+            self.logger.info(
+                f"    L_recon={total_recon_loss/n:.4f}, "
+                f"L_csg={total_csg/n:.4f}"
+            )
 
         return total_loss, total_recon_loss
 

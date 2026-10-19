@@ -36,14 +36,21 @@ class ResidualVectorQuantizer(nn.Module):
             all_codebook.append(codebook)
         return torch.stack(all_codebook)
 
-    def forward(self, x, use_sk=True):
+    def forward(self, x, use_sk=True, return_logits=False, logit_temperature=1.0):
         all_losses = []
         all_indices = []
+        all_logits = []
 
         x_q = 0
         residual = x
         for quantizer in self.vq_layers:
-            x_res, loss, indices = quantizer(residual, use_sk=use_sk)
+            if return_logits:
+                x_res, loss, indices, logits = quantizer(
+                    residual, use_sk=use_sk, return_logits=True,
+                    logit_temperature=logit_temperature)
+                all_logits.append(logits)
+            else:
+                x_res, loss, indices = quantizer(residual, use_sk=use_sk)
             residual = residual - x_res
             x_q = x_q + x_res
 
@@ -52,5 +59,11 @@ class ResidualVectorQuantizer(nn.Module):
 
         mean_losses = torch.stack(all_losses).mean()
         all_indices = torch.stack(all_indices, dim=-1)
+
+        if return_logits:
+            # (B, num_quantizers, n_e): one (B, n_e) block of code logits per RQ
+            # level. The collision token is not a quantizer level, so it can
+            # never appear here -- there are exactly len(num_emb_list) levels.
+            return x_q, mean_losses, all_indices, torch.stack(all_logits, dim=1)
 
         return x_q, mean_losses, all_indices

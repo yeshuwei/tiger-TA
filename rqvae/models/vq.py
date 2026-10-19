@@ -60,7 +60,7 @@ class VectorQuantizer(nn.Module):
         centered_distances = (distances - middle) / amplitude
         return centered_distances
 
-    def forward(self, x, use_sk=True):
+    def forward(self, x, use_sk=True, return_logits=False, logit_temperature=1.0):
         # Flatten input
         latent = x.view(-1, self.e_dim)
 
@@ -71,6 +71,9 @@ class VectorQuantizer(nn.Module):
         d = torch.sum(latent**2, dim=1, keepdim=True) + \
             torch.sum(self.embedding.weight**2, dim=1, keepdim=True).t()- \
             2 * torch.matmul(latent, self.embedding.weight.t())
+        # kept before the sinkhorn branch overwrites `d`, so code logits mean
+        # the same thing (squared L2 distance to each codeword) on every level
+        raw_d = d
         if not use_sk or self.sk_epsilon <= 0:
             indices = torch.argmin(d, dim=-1)
         else:
@@ -95,6 +98,14 @@ class VectorQuantizer(nn.Module):
         x_q = x + (x_q - x).detach()
 
         indices = indices.view(x.shape[:-1])
+
+        if return_logits:
+            # (..., n_e) code logits for this RQ level; purely an extra output,
+            # the quantisation above is byte-for-byte what it always was.
+            # Sign follows ETEGRec's official `dist='l2'` branch, which returns
+            # `logit = d` (the *un-negated* squared L2 distance).
+            logits = (raw_d / logit_temperature).view(*x.shape[:-1], self.n_e)
+            return x_q, loss, indices, logits
 
         return x_q, loss, indices
 

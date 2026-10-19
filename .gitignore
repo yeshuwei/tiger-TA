@@ -220,3 +220,13 @@ research/audit_structquant/
 clean_tiger/ckpt/
 clean_tiger/logs/
 clean_tiger/_smoke/
+
+# Integration run artifacts (checkpoints, SIDs, embeddings, logs, smoke data).
+# The integration/ Python harnesses and plan/experiments/status docs ARE tracked;
+# only the runtime output tree is excluded.
+integration/artifacts/
+
+# Other data / weight formats produced by the integration pipeline
+*.pt
+*.parquet
+*.pkl
